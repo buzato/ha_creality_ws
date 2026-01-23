@@ -57,6 +57,9 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_error_code = 0
         self._last_mr_poll = 0.0
         
+        # Extended status tracking
+        self._notified_filament_runout = False
+        
         # Caches
         self._is_k2_base: bool | None = None
 
@@ -369,6 +372,7 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_filename = fname
             self._notified_completed = False
             self._notified_minutes_to_end = False
+            self._notified_filament_runout = False
             self._last_error_code = 0
         
         if not fname:
@@ -400,9 +404,29 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 msg = f"Printer Error {code} (Key: {key}) occurred during '{fname}'"
                 await self._send_notification(msg)
             
+            
             self._last_error_code = code
 
-        # 3) Minutes to end
+        # 3) Filament Runout (materialStatus == 1)
+        # Using CONF_NOTIFY_ERROR as the toggle since it's an error-like state
+        if self._notify_error:
+            mat_status = d.get("materialStatus")
+            # 1 means runout, 0 means ok (presumably)
+            is_runout = False
+            try:
+                if mat_status is not None and int(mat_status) == 1:
+                    is_runout = True
+            except (ValueError, TypeError):
+                pass
+
+            if is_runout and not self._notified_filament_runout:
+                await self._send_notification(f"Filament runout detected during '{fname}'")
+                self._notified_filament_runout = True
+            elif not is_runout and self._notified_filament_runout:
+                # Reset if it goes back to normal (user reloaded filament)
+                self._notified_filament_runout = False
+
+        # 4) Minutes to end
         if self._notify_minutes_to_end:
             left_s = d.get("printTimeLeft")
             if left_s is not None:

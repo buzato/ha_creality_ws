@@ -5,6 +5,31 @@ All notable changes to HA Creality WS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-01-23
+> [List of issues (0.9.0)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.0
+
+### Added
+- **CFS Support (Creality Filament System)** (@buzato):
+  - **Comprehensive Sensors**: Added sensors for each CFS box (temperature, humidity) and slot (filament type, color, percentage, active status).
+  - **Native UI Card**: Introduced the **Creality CFS Card** with a built-in visual editor.
+    - Renders tiles for all slots (up to 4 boxes x 4 slots) + external filament.
+    - Dynamic UI: Active filament pulses, humidity color coding (Green/Orange/Red).
+    - No YAML required: Fully configurable via entity mapping in the UI.
+  - **New Services**: Added `request_cfs_info` (manual refresh), `cfs_load`, and `cfs_unload` for programmatic filament management.
+- **Safety Features**:
+  - **Confirmation Dialog**: Added a "double-check" modal for destructive actions like "Stop Print" to prevent accidental cancellations.
+
+### Fixed
+- **K2 Base Compatibility** (@PavelStoyan0v):
+  - **Chamber Control**: Fixed chamber temperature control by implementing a Moonraker fallback for fetching accurate targets when the primary method fails.
+  - **Data Accuracy**: Suppressed erroneous `targetBoxTemp:0` values.
+  - **Threshold Removal**: Removed the hardcoded 40°C threshold for chamber heating, allowing for more flexible control.
+- **go2rtc Custom Configuration**: Fixed an issue where custom go2rtc URL and Port settings were ignored.
+- **Coordinator & Stability**: 
+  - Refactored the central data coordinator for efficient high-frequency WebSocket updates.
+  - Resolved merge conflicts and sync issues for reliable state tracking.
+- **Frontend Assets**: Improved resource loading and fixed loading issues for custom card resources.
+
 ## [0.8.0] - 2026-01-05
 > [List of issues (0.8.0)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.8.0
 

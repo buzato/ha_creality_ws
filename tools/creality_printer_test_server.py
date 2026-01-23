@@ -305,6 +305,8 @@ class PrinterState:
         self._nozzle_temp = 25.0
         self._bed_temp = 25.0
         self._box_temp = 26.0
+        self._material_status = 0
+
 
         # motion
         self._pos_x = 0.0
@@ -411,6 +413,9 @@ class PrinterState:
                 self._print_start_ts = time.monotonic()
 
     # ----------------------- control mutations -----------------------
+    def set_material_status(self, status: int) -> None:
+        self._material_status = int(status)
+
     def set_pause(self, paused: bool) -> None:
         self._paused = paused
         self._state_code = 5 if paused else (1 if self._progress < 100 else 0)
@@ -591,6 +596,9 @@ class PrinterState:
             "caseFan": self._case_fan,
             "modelFan": self._model_fan,
             "sideFan": self._side_fan,
+            
+            # extra
+            "materialStatus": self._material_status,
         }
 
         if self._cfg.get("box_sensor"):
@@ -667,6 +675,9 @@ async def ws_handle_conn(ws: Any, state: PrinterState):
                     handled = True
                 elif "gcodeCmd" in params:
                     # no-op placeholder
+                    handled = True
+                elif "materialStatus" in params:
+                    state.set_material_status(int(params.get("materialStatus") or 0))
                     handled = True
 
                 if handled:

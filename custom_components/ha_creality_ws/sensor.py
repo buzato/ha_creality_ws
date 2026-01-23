@@ -9,6 +9,7 @@ from homeassistant.components.sensor import (  # type: ignore[import]
     SensorDeviceClass,
     SensorStateClass,
 )
+from homeassistant.helpers.entity import EntityCategory  # type: ignore[import]
 from .entity import KEntity
 from .const import DOMAIN
 
@@ -189,6 +190,20 @@ SPECS: list[dict[str, Any]] = [
     },
 ]
 
+# ----------------- dynamic "mapped" sensors -----------------
+MAPPED_SPECS: list[dict[str, Any]] = [
+    {
+        "uid": "filament_status",
+        "name": "Filament Status",
+        "field": "materialStatus",
+        "mapping": {
+            0: "Normal",
+            1: "Filament Runout",
+        },
+        "icon": "mdi:printer-3d-nozzle-alert",
+    },
+]
+
 
 class KSimpleFieldSensor(KEntity, SensorEntity):
     """Generic sensor bound to one telemetry field or a special computed field."""
@@ -258,6 +273,39 @@ class KSimpleFieldSensor(KEntity, SensorEntity):
                 return d
         
         return self._get_attrs(self.coordinator.data)
+
+
+class KMappedSensor(KEntity, SensorEntity):
+    """Sensor that maps integer values to human-readable strings."""
+    
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, spec: dict[str, Any]):
+        super().__init__(coordinator, spec["name"], spec["uid"])
+        self._field: str = spec["field"]
+        self._mapping: dict[int, str] = spec.get("mapping", {})
+        if spec.get("icon"):
+            self._attr_icon = spec["icon"]
+
+    @property
+    def native_value(self) -> str | None:
+        if self._should_zero():
+            return "Unknown"
+            
+        d = self.coordinator.data
+        if not d:
+            return "Unknown"
+            
+        raw = d.get(self._field)
+        if raw is None:
+            return "Unknown"
+            
+        try:
+            val = int(raw)
+            return self._mapping.get(val, str(raw))
+        except (ValueError, TypeError):
+            return str(raw)
+
 
 class PrintStatusSensor(KEntity, SensorEntity):
     _attr_name = "Print Status"
@@ -763,6 +811,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 ents.append(KSimpleFieldSensor(coord, spec))
         else:
             ents.append(KSimpleFieldSensor(coord, spec))
+
+    # Mapped sensors
+    for spec in MAPPED_SPECS:
+        ents.append(KMappedSensor(coord, spec))
 
     # Additional metrics
     ents.extend([
