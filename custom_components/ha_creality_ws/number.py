@@ -12,6 +12,7 @@ except Exception:  # older cores
 
 from .const import DOMAIN
 from .entity import KEntity
+from .utils import ModelDetection
 from homeassistant.helpers import entity_registry as er  # type: ignore[import]
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -115,6 +116,10 @@ class NozzleTargetNumber(KEntity, NumberEntity):
         max_v = self._attr_native_max_value
         if max_v is not None:
             v = min(int(max_v), v)
+        
+        self.coordinator.data["targetNozzleTemp"] = v
+        self.coordinator.async_update_listeners()
+        
         await self.coordinator.client.send_set_retry(nozzleTempControl=v)
 
 
@@ -151,6 +156,10 @@ class BedTargetNumber(KEntity, NumberEntity):
         max_v = self._attr_native_max_value
         if max_v is not None:
             v = min(int(max_v), v)
+        
+        self.coordinator.data[f"targetBedTemp{self._idx}"] = v
+        self.coordinator.async_update_listeners()
+        
         await self.coordinator.client.send_set_retry(bedTempControl={"num": self._idx, "val": v})
 
 
@@ -189,12 +198,21 @@ class BoxTargetNumber(KEntity, NumberEntity):
             return None
 
     async def async_set_native_value(self, value: float) -> None:
-        # Chamber heater only activates when > 40°C (K2 Plus behavior)
-        v = 0 if value <= 40 else int(round(value))
+        # Bypass this restriction for the Base K2.
+        if ModelDetection(self.coordinator.data).is_k2_base:
+            v = int(round(value))
+        else:
+            v = 0 if value <= 40 else int(round(value))
+
         v = max(int(self._attr_native_min_value or 0), v)
         max_v = self._attr_native_max_value
         if max_v is not None:
             v = min(int(max_v), v)
+        
+        # Optimistic update
+        self.coordinator.data["targetBoxTemp"] = v
+        self.coordinator.async_update_listeners()
+            
         await self.coordinator.client.send_set_retry(boxTempControl=v)
 
 

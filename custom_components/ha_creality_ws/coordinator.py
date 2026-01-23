@@ -3,7 +3,9 @@ import logging
 import asyncio
 from typing import Any, Iterable
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .ws_client import KClient
+from .utils import ModelDetection
 from .const import (
     DOMAIN, 
     STALE_AFTER_SECS,
@@ -294,6 +296,10 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
         """Handle incoming WebSocket telemetry data."""
+        # Suppress broken targetBoxTemp:0 from K2 Base port 9999
+        if (payload.get("targetBoxTemp") == 0) and ModelDetection(self.data).is_k2_base:
+            payload.pop("targetBoxTemp")
+
         self.data.update(payload)
         self._recompute_paused_from_telemetry()
         
@@ -305,6 +311,13 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # --- Notifications ---
         await self._check_notifications(payload)
+
+        # --- Moonraker Fallback (K2 Base) ---
+        if ModelDetection(self.data).is_k2_base:
+            now = self.hass.loop.time()
+            if (now - getattr(self, "_last_mr_poll", 0) > 10.0):
+                self._last_mr_poll = now
+                self.hass.async_create_task(self._poll_moonraker_extras())
         
         # --- Conditional Throttling (printing only) ---
         # Always update immediately when NOT printing; throttle entity updates only when printing
@@ -401,3 +414,29 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self.hass.services.async_call(domain, service, service_data)
             except Exception as e:
                 _LOGGER.error("Failed to send notification: %s", e)
+
+    async def _poll_moonraker_extras(self):
+        """Poll Moonraker for missing telemetry fields (e.g. chamber target)."""
+        host = self.client._host
+        # Only poll if we have a host and integration is still active
+        if not host or self.power_is_off():
+            return
+            
+        url = f"http://{host}:7125/printer/objects/query?temperature_fan%20chamber_fan"
+        try:
+            session = async_get_clientsession(self.hass)
+            async with session.get(url, timeout=2.0) as resp:
+                if resp.status == 200:
+                    res = await resp.json()
+                    status = res.get("result", {}).get("status", {})
+                    fan = status.get("temperature_fan chamber_fan")
+                    if fan and "target" in fan:
+                        target = fan["target"]
+                        # Only update if it's different to avoid unnecessary listener triggers
+                        if self.data.get("targetBoxTemp") != target:
+                            _LOGGER.debug("Updated targetBoxTemp from Moonraker: %s", target)
+                            self.data["targetBoxTemp"] = target
+                            self.async_update_listeners()
+        except Exception:
+            # Moonraker might be disabled or port 7125 blocked; fail silently
+            pass
