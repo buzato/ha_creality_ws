@@ -4,6 +4,7 @@ import asyncio
 from typing import Any, Iterable
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .ws_client import KClient
 from .utils import ModelDetection
 from .const import (
@@ -316,7 +317,15 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if (payload.get("targetBoxTemp") == 0) and self._is_k2_base:
             payload.pop("targetBoxTemp")
 
+        # Check if boxsInfo is present and we haven't discovered CFS entities yet
+        had_cfs = "boxsInfo" in self.data
         self.data.update(payload)
+        has_cfs = "boxsInfo" in self.data
+        
+        if has_cfs and not had_cfs:
+            _LOGGER.info("CFS detected in telemetry, triggering dynamic discovery")
+            async_dispatcher_send(self.hass, f"{DOMAIN}_new_entities_{self._config_entry_id}")
+
         self._recompute_paused_from_telemetry()
         
         # Try queued actions if state allows

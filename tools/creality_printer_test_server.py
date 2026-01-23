@@ -332,6 +332,76 @@ class PrinterState:
         self._model_fan = 0
         self._side_fan = 0
 
+        # CFS state
+        self._cfs_boxes = [
+            {
+                "id": 0,
+                "state": 0,
+                "type": 1,
+                "materials": [
+                    {
+                        "id": 0,
+                        "vendor": "Generic",
+                        "type": "PLA",
+                        "color": "#01b04ae",
+                        "name": "Generic PLA",
+                        "minTemp": 190,
+                        "maxTemp": 240,
+                        "selected": 0,
+                        "percent": 100,
+                        "state": 1,
+                    }
+                ],
+            },
+            {
+                "id": 1,
+                "state": 1,
+                "type": 0,
+                "materials": [
+                    {
+                        "id": 0,
+                        "vendor": "Creality",
+                        "type": "PLA",
+                        "name": "Hyper PLA",
+                        "color": "#0000000",
+                        "percent": 95,
+                        "state": 1,
+                        "selected": 1,
+                    },
+                    {
+                        "id": 1,
+                        "vendor": "Creality",
+                        "type": "PLA",
+                        "name": "Hyper PLA",
+                        "color": "#0ffffff",
+                        "percent": 80,
+                        "state": 1,
+                        "selected": 0,
+                    },
+                    {
+                        "id": 2,
+                        "vendor": "Creality",
+                        "type": "PLA",
+                        "name": "Hyper PLA",
+                        "color": "#0ffa800",
+                        "percent": 100,
+                        "state": 1,
+                        "selected": 0,
+                    },
+                    {
+                        "id": 3,
+                        "vendor": "Creality",
+                        "type": "PLA",
+                        "name": "Hyper PLA",
+                        "color": "#0ff97e1",
+                        "percent": 75,
+                        "state": 1,
+                        "selected": 0,
+                    },
+                ],
+            },
+        ]
+
         # errors
         self._error_code = 0
 
@@ -382,6 +452,24 @@ class PrinterState:
         self._pos_y = 0.0 if "Y" in axes or "y" in axes else self._pos_y
         self._pos_z = 0.0 if "Z" in axes or "z" in axes else self._pos_z
         self._device_state = 0
+
+    def get_cfs_info(self) -> dict[str, Any]:
+        """Generate a realistic CFS status payload."""
+        # Update dynamic fields in CFS boxes
+        for box in self._cfs_boxes:
+            if box.get("type") == 0:  # Box with sensors
+                box["temp"] = round(_osc(28.0, 0.5, 1.0), 1)
+                box["humidity"] = round(_osc(40.0, 1.0, 2.0), 1)
+
+        return {
+            "boxsInfo": {
+                "same_material": [
+                    ["001001", "0000000", [{"boxId": 1, "materialId": 0}], "PLA"],
+                    ["001001", "0ffffff", [{"boxId": 1, "materialId": 1}], "PLA"],
+                ],
+                "materialBoxs": self._cfs_boxes,
+            }
+        }
 
     # ----------------------- tick/update loops -----------------------
     def _tick_temps(self):
@@ -539,7 +627,11 @@ async def ws_handle_conn(ws: Any, state: PrinterState):
                 continue
 
             if isinstance(msg, dict) and msg.get("method") == "get":
-                await ws_safe_send(ws, state.snapshot())
+                params = msg.get("params", {})
+                if "boxsInfo" in params:
+                    await ws_safe_send(ws, state.get_cfs_info())
+                else:
+                    await ws_safe_send(ws, state.snapshot())
             elif isinstance(msg, dict) and msg.get("method") == "set":
                 params = msg.get("params", {})
                 handled = False
