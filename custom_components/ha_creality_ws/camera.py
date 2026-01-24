@@ -11,7 +11,6 @@ additional HACS integrations.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Optional
 
@@ -19,9 +18,11 @@ from aiohttp import ClientError, web  # type: ignore[assignment]
 from homeassistant.core import HomeAssistant, callback  # type: ignore[assignment]
 from homeassistant.helpers.aiohttp_client import async_get_clientsession  # type: ignore[assignment]
 
+_LOGGER = logging.getLogger(__name__)
+
 # Import go2rtc client library
 try:
-    from go2rtc_client import Go2RtcRestClient, WebRTCSdpOffer, WebRTCSdpAnswer
+    from go2rtc_client import Go2RtcRestClient, WebRTCSdpOffer
     from go2rtc_client.exceptions import Go2RtcClientError
     GO2RTC_CLIENT_AVAILABLE = True
 except ImportError:
@@ -40,15 +41,13 @@ except ImportError:
 try:
     from homeassistant.components.camera import (
         Camera,
-        StreamType,
         CameraEntityFeature,  # type: ignore[attr-defined]
     )
-except Exception:  # compatibility with older cores
+except ImportError:  # compatibility with older cores
     from homeassistant.components.camera import Camera  # type: ignore[assignment]
-    StreamType = None  # type: ignore[assignment]
     try:
         from homeassistant.components.camera import CameraEntityFeature  # type: ignore[misc]
-    except Exception:  # very old cores
+    except ImportError:  # very old cores
         CameraEntityFeature = None  # type: ignore[assignment]
 
 from .const import (
@@ -57,12 +56,9 @@ from .const import (
     WEBRTC_URL_TEMPLATE,
     CONF_GO2RTC_URL,
     CONF_GO2RTC_PORT,
-    DEFAULT_GO2RTC_URL,
-    DEFAULT_GO2RTC_PORT,
 )
 from .entity import KEntity
 
-_LOGGER = logging.getLogger(__name__)
 
 
 class _FeatureMask(int):

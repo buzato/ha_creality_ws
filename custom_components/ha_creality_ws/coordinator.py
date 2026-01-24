@@ -326,8 +326,16 @@ class KCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         has_cfs = "boxsInfo" in self.data
         
         if has_cfs and not had_cfs:
-            _LOGGER.info("CFS detected in telemetry, triggering dynamic discovery")
+            _LOGGER.info("CFS detected in telemetry (first time), triggering dynamic discovery")
+            _LOGGER.debug("CFS Raw Data: %s", json.dumps(payload.get("boxsInfo"), default=str))
             async_dispatcher_send(self.hass, f"{DOMAIN}_new_entities_{self._config_entry_id}")
+        
+        # Log if CFS is connected but we are missing boxsInfo
+        if payload.get("cfsConnect") == 1 and not has_cfs:
+             # Only log this occasionally or if it's a change to avoid spam? 
+             # For now, let's log it if we expected it.
+             pass
+
 
         self._recompute_paused_from_telemetry()
         

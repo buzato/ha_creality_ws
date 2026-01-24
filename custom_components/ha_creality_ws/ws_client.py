@@ -42,7 +42,7 @@ class KClient:
         # Resolve host to IPv4 if available and build URL via template
         self._url = lambda: WS_URL_TEMPLATE.format(host=self._resolve_host())
         self._on_message = on_message
-        self._check_power_status: Callable[[], bool] | None = None
+        self._check_power_status: Optional[Callable[[], bool]] = None
         self._state: dict[str, Any] = {}
 
         self._task: Optional[asyncio.Task] = None
@@ -64,6 +64,28 @@ class KClient:
         self.msg_count = 0
         self.last_error: Optional[str] = None
         self.uptime_start = 0.0
+
+    @property
+    def host(self) -> str:
+        """Return the host address."""
+        return self._host
+
+    @property
+    def is_connected(self) -> bool:
+        """Return True if WebSocket is connected."""
+        return self._ws is not None and self._ws_ready.is_set()
+
+    def get_url(self) -> str:
+        """Return the current WebSocket URL."""
+        return self._url() if self._url else "unknown"
+
+    def has_connected_once(self) -> bool:
+        """Return True if we have connected at least once."""
+        return self._connected_once.is_set()
+
+    def is_task_running(self) -> bool:
+        """Return True if the main loop task is running."""
+        return self._task is not None and not self._task.done()
 
     # ---------- lifecycle ----------
     async def start(self) -> None:
@@ -154,15 +176,15 @@ class KClient:
             # --- Power Saving Check (Start of Loop) ---
             # If printer is known to be powered off, sleep briefly and skip connection attempt
             if self._check_power_status and self._check_power_status():
-                 _LOGGER.debug("Printer power is OFF; sleeping 60s before next check host=%s", self._host)
-                 # Reset backoff so we start fresh when power returns
-                 backoff = RETRY_MIN_BACKOFF
-                 connect_failures = 0
-                 try:
-                     await asyncio.wait_for(self._stop.wait(), timeout=10.0)
-                 except asyncio.TimeoutError:
-                     pass
-                 continue
+                _LOGGER.debug("Printer power is OFF; sleeping 60s before next check host=%s", self._host)
+                # Reset backoff so we start fresh when power returns
+                backoff = RETRY_MIN_BACKOFF
+                connect_failures = 0
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    pass
+                continue
 
             try:
                 url = self._url()
@@ -175,7 +197,6 @@ class KClient:
                     self._connected_once.set()
                     
                     # Store connect time to calculate duration later
-                    connect_ts = time.monotonic()
                     self._last_rx = time.monotonic()
                     self.uptime_start = time.monotonic()
                     self.reconnect_count += 1
@@ -237,7 +258,7 @@ class KClient:
                 is_off = self._check_power_status and self._check_power_status()
                 
                 if is_off:
-                     _LOGGER.debug("K WS closed/failed (power OFF) host=%s reason=%s", self._host, exc)
+                    _LOGGER.debug("K WS closed/failed (power OFF) host=%s reason=%s", self._host, exc)
                 elif self._is_benign_close(exc):
                     _LOGGER.debug("K WS closed host=%s reason=%s", self._host, exc)
                 else:
@@ -257,7 +278,7 @@ class KClient:
 
                 self._ws = None
                 self._ws_ready.clear()
-                pass
+
 
             # If no power switch AND we've failed > 5 times, assume printer is off -> slow poll
             if use_fixed_retry and connect_failures >= 5:
@@ -296,7 +317,7 @@ class KClient:
         try:
             await asyncio.sleep(5.0)
             if self._ws and not self._stop.is_set():
-               pass
+                pass
         except Exception:
             pass
 
