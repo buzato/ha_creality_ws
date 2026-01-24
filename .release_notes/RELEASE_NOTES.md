@@ -5,6 +5,18 @@ All notable changes to HA Creality WS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [0.9.1] - 2026-01-24
+> [List of issues (0.9.1)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.1
+
+### Fixed
+- **WebRTC Regression**: Fixed an issue where cameras would fail to initialize if a custom go2rtc configuration was unreachable or incorrectly set.
+  - Added strict fallback logic: if a custom go2rtc server is unreachable, the integration now logs a warning and automatically falls back to Home Assistant's internal discovery.
+  - **Migration Cleanup**: The integration now actively removes incorrect defaults (`localhost:11984`) introduced in 0.9.0 if they are present, restoring standard auto-discovery behavior for affected users.
+- **Service Stability**: Fixed a crash in the `request_cfs_info` service when a printer was disconnected.
+- **Service Targeting**: Added `device_id` selector to `request_cfs_info`, allowing users to target specific printers instead of all connected devices.
+- **Service Feedback**: Added persistent notifications to `request_cfs_info` to confirm success/failure counts.
+
 ## [0.9.0] - 2026-01-23
 > [List of issues (0.9.0)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.0
 

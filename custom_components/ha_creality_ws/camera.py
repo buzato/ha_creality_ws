@@ -505,11 +505,15 @@ class CrealityWebRTCCamera(_BaseCamera):
                 return True
                 
             except Exception as exc:
-                _LOGGER.error(
-                    "ha_creality_ws: Failed to connect to custom go2rtc at %s: %s",
+                _LOGGER.warning(
+                    "ha_creality_ws: Failed to connect to CUSTOM go2rtc at %s: %s. "
+                    "Falling back to Home Assistant default go2rtc...",
                     self._custom_go2rtc_url, exc
                 )
-                return False
+                # Fall through to standard discovery logic
+                self._go2rtc_client = None
+                self._go2rtc_server_url = None
+
 
         # Get HA's go2rtc configuration
         go2rtc_data = self.hass.data.get(GO2RTC_DOMAIN)

@@ -40,7 +40,9 @@ from .coordinator import KCoordinator
 from .frontend import CrealityCardRegistration
 from .utils import ModelDetection
 from homeassistant.helpers import entity_registry as er  # type: ignore[import]
+from homeassistant.helpers import device_registry as dr  # type: ignore[import]
 from homeassistant.helpers.aiohttp_client import async_get_clientsession  # type: ignore[import]
+
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[str] = ["sensor", "switch", "camera", "button", "number", "fan", "light", "image"]
@@ -92,12 +94,18 @@ def _migrate_go2rtc_settings(hass: HomeAssistant, entry: ConfigEntry) -> None:
             current_options[CONF_GO2RTC_URL] = old_url
             needs_update = True
             _LOGGER.info("Migrated go2rtc_url from entry.data to options")
-        else:
-            # Set default if missing
-            current_options[CONF_GO2RTC_URL] = DEFAULT_GO2RTC_URL
-            needs_update = True
-            _LOGGER.debug("Setting default go2rtc_url: %s", DEFAULT_GO2RTC_URL)
     
+    # Clean up "bad defaults" introduced in 0.9.0
+    # If users have localhost:11984 set as custom config, remove it to restore 0.8.0 behavior (auto-discovery)
+    elif current_options.get(CONF_GO2RTC_URL) == DEFAULT_GO2RTC_URL:
+        # Check port too
+        current_port = current_options.get(CONF_GO2RTC_PORT)
+        if current_port == DEFAULT_GO2RTC_PORT:
+            _LOGGER.info("Cleaning up default go2rtc settings (restoring auto-discovery)")
+            current_options.pop(CONF_GO2RTC_URL)
+            current_options.pop(CONF_GO2RTC_PORT)
+            needs_update = True
+
     # Migrate go2rtc_port if missing or in data
     if not current_options.get(CONF_GO2RTC_PORT):
         # Check if it was stored in entry.data (old location)
@@ -106,14 +114,10 @@ def _migrate_go2rtc_settings(hass: HomeAssistant, entry: ConfigEntry) -> None:
             try:
                 current_options[CONF_GO2RTC_PORT] = int(old_port)
             except (ValueError, TypeError):
-                current_options[CONF_GO2RTC_PORT] = DEFAULT_GO2RTC_PORT
+                # Don't set default here anymore
+                pass
             needs_update = True
             _LOGGER.info("Migrated go2rtc_port from entry.data to options")
-        else:
-            # Set default if missing
-            current_options[CONF_GO2RTC_PORT] = DEFAULT_GO2RTC_PORT
-            needs_update = True
-            _LOGGER.debug("Setting default go2rtc_port: %s", DEFAULT_GO2RTC_PORT)
     
     if needs_update:
         hass.config_entries.async_update_entry(entry, options=current_options)
@@ -360,10 +364,53 @@ async def _register_custom_services(hass: HomeAssistant) -> None:
 
     async def request_cfs_info(call: ServiceCall) -> None:
         """Service to manually request CFS info from all or specific printers."""
+        device_ids = call.data.get("device_id")
+        target_entry_ids = set()
+        
+        # If devices selected, resolve them to config entries
+        if device_ids:
+            dev_reg = dr.async_get(hass)
+            # Handle single string or list
+            if isinstance(device_ids, str):
+                device_ids = [device_ids]
+                
+            for dev_id in device_ids:
+                device = dev_reg.async_get(dev_id)
+                if device:
+                    for entry_id in device.config_entries:
+                        target_entry_ids.add(entry_id)
+        
+        # Collect coordinators to target
+        targets = []
         for entry_id, coord in hass.data[DOMAIN].items():
             if isinstance(coord, KCoordinator):
+                # If no devices selected, target all. Otherwise, check if entry matches.
+                if not target_entry_ids or entry_id in target_entry_ids:
+                    targets.append(coord)
+        
+        if not targets:
+            _LOGGER.warning("No applicable printers found for CFS info request")
+            return
+
+        success_count = 0
+        fail_count = 0
+        
+        for coord in targets:
+            try:
                 _LOGGER.info("Manually requesting CFS info for %s", coord.client._host)
                 await coord.client.request_boxs_info()
+                success_count += 1
+            except Exception as exc:
+                _LOGGER.error("Failed to request CFS info for %s: %s", coord.client._host, exc)
+                fail_count += 1
+        
+        # Notify user of results
+        pn_async_create(
+            hass,
+            title="CFS Info Request",
+            message=f"Request sent to {success_count} printer(s).\nFailures: {fail_count}",
+            notification_id="cfs_request_result"
+        )
 
     if not hass.services.has_service(DOMAIN, "request_cfs_info"):
         hass.services.async_register(DOMAIN, "request_cfs_info", request_cfs_info)
