@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Service Feedback**: Added persistent notifications to `request_cfs_info` to confirm success/failure counts.
 
 ### Fixed
-- **Startup Robustness (Smart & Simple)**: Refactored the entire startup architecture.
+- **Startup Robustness**: Refactored the entire startup architecture.
   - Integration explicitly waits for `boxsInfo` (CFS) and chamber temps during setup, ensuring 100% entity coverage at booting.
   - Implemented a "hybrid" safety net: `sensor.py` retains a thread-safe dynamic loader to catch any entities that arrive late, preventing "Duplicate ID" errors.
 - **Chamber Control**: Fixed missing "Chamber Target" entity for K2 Pro/Plus by auto-enabling control if the printer reports a target temperature, regardless of model detection defaults.

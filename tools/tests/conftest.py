@@ -93,6 +93,10 @@ class KClient:  # type: ignore
     def last_rx_monotonic(self) -> float:
         return self._last
 
+    @property
+    def is_connected(self) -> bool:
+        return False
+
 setattr(ws_client_mod, "KClient", KClient)
 sys.modules["custom_components.ha_creality_ws.ws_client"] = ws_client_mod
 
