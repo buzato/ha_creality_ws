@@ -742,6 +742,7 @@ class KCFSExtSlotSensor(KEntity, SensorEntity):
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    _LOGGER.info("Setting up sensor platform for entry: %s", entry.entry_id)
     coord = hass.data[DOMAIN][entry.entry_id]
     ents: list[SensorEntity] = []
 
@@ -780,6 +781,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     if uid not in added_cfs_uids:
                         new_ents.append(KCFSBoxSensor(coord, box_id, s_type))
                         added_cfs_uids.add(uid)
+                        _LOGGER.debug("Registered new CFS UID: %s", uid)
+                    else:
+                         _LOGGER.debug("Skipping existing CFS UID: %s", uid)
                 
             # Slots
             for idx, slot in enumerate(box.get("materials", [])):
@@ -795,6 +799,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     if uid not in added_cfs_uids:
                         new_ents.append(KCFSSlotSensor(coord, box_id, slot_id, s_type))
                         added_cfs_uids.add(uid)
+                        _LOGGER.debug("Registered new CFS Slot UID: %s", uid)
+                    else:
+                        _LOGGER.debug("Skipping existing CFS Slot UID: %s", uid)
 
         if external_box:
             materials = external_box.get("materials", [])
@@ -805,25 +812,51 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     if uid not in added_cfs_uids:
                         new_ents.append(KCFSExtSlotSensor(coord, slot_id, s_type))
                         added_cfs_uids.add(uid)
+                        _LOGGER.debug("Registered new CFS External UID: %s", uid)
+                    else:
+                        _LOGGER.debug("Skipping existing CFS External UID: %s", uid)
             else:
                 _LOGGER.debug("External box found but has no materials")
 
-        _LOGGER.debug("add_cfs_entities created %d new entities", len(new_ents))
+        _LOGGER.debug("add_cfs_entities prepared %d new entities. Total tracked UIDs: %d", len(new_ents), len(added_cfs_uids))
         return new_ents
 
-    # Add core sensors immediately
-    initial_ents = []
-    initial_ents.append(PrintStatusSensor(coord))
-    initial_ents.append(UsedMaterialLengthSensor(coord))
-    initial_ents.append(PrintJobTimeSensor(coord))
-    initial_ents.append(PrintLeftTimeSensor(coord))
-    initial_ents.append(RealTimeFlowSensor(coord))
-    initial_ents.append(CurrentObjectSensor(coord))
-    initial_ents.append(ObjectCountSensor(coord))
-    initial_ents.append(KPrintControlSensor(coord))
+
+    # Dynamic CFS entity handler
+    def _on_new_entities():
+        """Handle signal for new entities (e.g. late CFS discovery)."""
+        _LOGGER.debug("Dynamic entity signal received, checking for new CFS entities...")
+        new_ents = add_cfs_entities()
+        if new_ents:
+            _LOGGER.info("Adding %d dynamic CFS entities", len(new_ents))
+            # Ensure we run on the main loop if we are in a thread
+            from asyncio import run_coroutine_threadsafe
+            async def _schedule_add():
+                await async_add_entities(new_ents)
+            run_coroutine_threadsafe(_schedule_add(), hass.loop)
+    
+    # Listen for the signal fired by coordinator
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, 
+            f"{DOMAIN}_new_entities_{entry.entry_id}", 
+            _on_new_entities
+        )
+    )
+
+    
+    # Core sensors
+    ents.append(PrintStatusSensor(coord))
+    ents.append(UsedMaterialLengthSensor(coord))
+    ents.append(PrintJobTimeSensor(coord))
+    ents.append(PrintLeftTimeSensor(coord))
+    ents.append(RealTimeFlowSensor(coord))
+    ents.append(CurrentObjectSensor(coord))
+    ents.append(ObjectCountSensor(coord))
+    ents.append(KPrintControlSensor(coord))
     
     # Static model/host sensor
-    initial_ents.append(KSimpleFieldSensor(
+    ents.append(KSimpleFieldSensor(
         coord,
         {
             "uid": "model_info",
@@ -838,32 +871,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
             )
         }
     ))
-    
-    async_add_entities(initial_ents)
-
-    # Dynamic CFS entity handler
-    def _on_new_entities():
-        """Handle signal for new entities (e.g. late CFS discovery)."""
-        _LOGGER.debug("Dynamic entity signal received, checking for new CFS entities...")
-        new_ents = add_cfs_entities()
-        if new_ents:
-            _LOGGER.info("Adding %d dynamic CFS entities", len(new_ents))
-            async_add_entities(new_ents)
-    
-    # Listen for the signal fired by coordinator
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass, 
-            f"{DOMAIN}_new_entities_{entry.entry_id}", 
-            _on_new_entities
-        )
-    )
-
-    # Try to add CFS entities if data is somehow already there (race condition)
-    # usually it won't be, hence the listener, but good measure.
-    static_cfs = add_cfs_entities()
-    if static_cfs:
-        async_add_entities(static_cfs)
 
 
     # Add chamber temperature if supported by model. Also allow live-telemetry fallback if cache missing.
@@ -886,15 +893,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ents.append(KMappedSensor(coord, spec))
 
     # Additional metrics
-    ents.extend([
-        UsedMaterialLengthSensor(coord),
-        PrintJobTimeSensor(coord),
-        PrintLeftTimeSensor(coord),
-        RealTimeFlowSensor(coord),
-        CurrentObjectSensor(coord),
-        ObjectCountSensor(coord),
-        KPrintControlSensor(coord),
-    ])
 
     # --- Max temperature sensors (non-editable, from cached/live capability limits) ---
     # Pull cached values first
@@ -934,9 +932,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if has_box_sensor and max_box is not None:
         ents.append(KMaxTempSensor(coord, name="Max Chamber Temperature", uid="max_box_temp", key="max_box_temp"))
 
+    # Register static entities immediately
+    try:
+        async_add_entities(ents)
+    except Exception as e:
+        _LOGGER.error("Failed to add static sensors: %s", e)
+
     # --- CFS Entities (Dynamic Initial Load) ---
-    ents.extend(add_cfs_entities())
-    async_add_entities(ents)
+    try:
+        cfs_ents = add_cfs_entities()
+        if cfs_ents:
+            async_add_entities(cfs_ents)
+    except Exception as e:
+        _LOGGER.error("Failed to add initial CFS sensors: %s", e)
+
 
 
 

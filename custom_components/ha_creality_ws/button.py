@@ -16,6 +16,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         KPrintPauseButton(coord),
         KPrintResumeButton(coord),
         KPrintStopButton(coord),
+        KReconnectButton(coord),
     ])
 
 class KHomeAllButton(KEntity, ButtonEntity):
@@ -71,3 +72,14 @@ class KPrintStopButton(_BasePrintButton):
             return
         await self.coordinator.client.send_set_retry(stop=1)
         # don't force paused flag here; telemetry will reflect idle soon
+
+class KReconnectButton(KEntity, ButtonEntity):
+    _attr_icon = "mdi:connection"
+    def __init__(self, coordinator):
+        # Unique ID suffix: reconnect_ws
+        super().__init__(coordinator, "Reconnect", "reconnect_ws")
+        
+    async def async_press(self) -> None:
+        _LOGGER.info("Manual reconnect triggered by user")
+        # Force a reconnect at the client level
+        await self.coordinator.client.reconnect()

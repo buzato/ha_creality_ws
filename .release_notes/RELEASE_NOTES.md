@@ -9,13 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.1] - 2026-01-24
 > [List of issues (0.9.1)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.1
 
-### Fixed
-- **WebRTC Regression**: Fixed an issue where cameras would fail to initialize if a custom go2rtc configuration was unreachable or incorrectly set.
-  - Added strict fallback logic: if a custom go2rtc server is unreachable, the integration now logs a warning and automatically falls back to Home Assistant's internal discovery.
-  - **Migration Cleanup**: The integration now actively removes incorrect defaults (`localhost:11984`) introduced in 0.9.0 if they are present, restoring standard auto-discovery behavior for affected users.
-- **Service Stability**: Fixed a crash in the `request_cfs_info` service when a printer was disconnected.
+### Added
+- **Manual Reconnect Button**: Added a new `button` entity (`button.*_reconnect`) to force a WebSocket reconnection if the printer becomes unresponsive.
 - **Service Targeting**: Added `device_id` selector to `request_cfs_info`, allowing users to target specific printers instead of all connected devices.
 - **Service Feedback**: Added persistent notifications to `request_cfs_info` to confirm success/failure counts.
+
+### Fixed
+- **Startup Robustness (Smart & Simple)**: Refactored the entire startup architecture.
+  - Integration explicitly waits for `boxsInfo` (CFS) and chamber temps during setup, ensuring 100% entity coverage at booting.
+  - Implemented a "hybrid" safety net: `sensor.py` retains a thread-safe dynamic loader to catch any entities that arrive late, preventing "Duplicate ID" errors.
+- **Chamber Control**: Fixed missing "Chamber Target" entity for K2 Pro/Plus by auto-enabling control if the printer reports a target temperature, regardless of model detection defaults.
+- **WebRTC Regression**: Fixed camera initialization failure when custom go2rtc settings were unreachable; added automatic fallback to discovery.
+- **Service Stability**: Fixed crash in `request_cfs_info` when printer disconnected.
 
 ## [0.9.0] - 2026-01-23
 > [List of issues (0.9.0)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.0

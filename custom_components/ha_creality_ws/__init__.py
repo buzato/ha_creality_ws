@@ -209,15 +209,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ok = await coord.wait_first_connect(timeout=10.0)
             # After first connect, wait briefly for model fields to appear to reduce flakiness
             if ok:
-                got_fields = await coord.wait_for_fields(["model", "modelVersion", "hostname"], timeout=6.0)
-                # If CFS is reported, wait a bit for boxsInfo
+                # Wait for basic fields to confirm model and capabilities
+                await coord.wait_for_fields(["model", "modelVersion", "hostname"], timeout=6.0)
+                
+                # CFS / Telemetry Wait Sequence
+                # If CFS detected, we MUST wait for boxsInfo to populate or sensors won't get created.
                 if coord.data.get("cfsConnect") == 1:
+                    _LOGGER.info("CFS connected; requesting box info and waiting...")
+                    # Request updated info to be sure
                     await coord.client.request_boxs_info()
+                    # Wait for it to arrive
                     await coord.wait_for_fields(["boxsInfo"], timeout=5.0)
-
+                
+                # Opportunistic wait for chamber/feature fields if not yet present
+                # This helps the logic below verify capabilities
+                if "maxBoxTemp" not in coord.data:
+                    # Give a tiny storage for these lazier fields to arrive
+                    await coord.wait_for_fields(["maxBoxTemp", "targetBoxTemp"], timeout=2.0)
             else:
                 got_fields = False
-            if (ok and coord.data) or got_fields:
+            
+            # Always update cache if we have data, even if wait timed out partially
+            if (ok and coord.data):
                 # Store device info in entry data
                 d = coord.data or {}
                 printermodel = ModelDetection(d)
@@ -237,10 +250,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 new_data["_cached_has_chamber_control"] = printermodel.has_chamber_control
                 new_data["_cached_has_box_sensor"] = printermodel.has_box_sensor
                 new_data["_cached_has_box_control"] = printermodel.has_box_control
-                # Heuristic promotions: if telemetry already exposes fields, promote capabilities
-                if any(k in d for k in ("boxTemp", "targetBoxTemp", "maxBoxTemp")):
+                # Feature Promotion: Trust telemetry over model defaults
+                # If printer reports chamber targets/temps, ENABLE capabilities
+                if "targetBoxTemp" in d:
+                    new_data["_cached_has_chamber_control"] = True
+                    new_data["_cached_has_box_control"] = True
+                if "boxTemp" in d or "maxBoxTemp" in d:
                     new_data["_cached_has_chamber_sensor"] = True
-                    new_data["_cached_has_box_sensor"] = True  # legacy mirror
+                    new_data["_cached_has_box_sensor"] = True
                 if "lightSw" in d:
                     new_data["_cached_has_light"] = True
                 
