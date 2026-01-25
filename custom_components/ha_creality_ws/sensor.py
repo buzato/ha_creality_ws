@@ -1,3 +1,4 @@
+"""Sensor entities for Creality 3D printers."""
 from __future__ import annotations
 import logging
 import json
@@ -899,7 +900,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     cached = None
     try:
         cached = coord.hass.config_entries.async_get_entry(getattr(coord, "_config_entry_id", None)).data  # type: ignore[assignment]
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         cached = None
 
     def _cached_or_live(key: str):
@@ -935,16 +936,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # Register static entities immediately
     try:
         async_add_entities(ents)
-    except Exception as e:
-        _LOGGER.error("Failed to add static sensors: %s", e)
+    except Exception as err:  # pylint: disable=broad-except
+        _LOGGER.error("Failed to add static sensors: %s", err)
 
     # --- CFS Entities (Dynamic Initial Load) ---
     try:
         cfs_ents = add_cfs_entities()
         if cfs_ents:
             async_add_entities(cfs_ents)
-    except Exception as e:
-        _LOGGER.error("Failed to add initial CFS sensors: %s", e)
+    except Exception as err:  # pylint: disable=broad-except
+        _LOGGER.error("Failed to add initial CFS sensors: %s", err)
 
 
 
@@ -966,8 +967,8 @@ class KMaxTempSensor(KEntity, SensorEntity):
             # Prefer UnitOfTemperature if available
             from homeassistant.const import UnitOfTemperature  # type: ignore[import]
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        except Exception:
-            from homeassistant.const import TEMP_CELSIUS  # type: ignore[import]
+        except Exception:  # pylint: disable=broad-except
+            from homeassistant.const import TEMP_CELSIUS  # type: ignore[import] # pylint: disable=import-outside-toplevel
             self._attr_native_unit_of_measurement = TEMP_CELSIUS
 
     @property

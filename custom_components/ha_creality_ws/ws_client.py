@@ -1,3 +1,4 @@
+"""WebSocket client for Creality 3D printers."""
 from __future__ import annotations
 
 import asyncio
@@ -56,8 +57,11 @@ class KClient:
         self._hb_task: Optional[asyncio.Task] = None
         self._tick_task: Optional[asyncio.Task] = None
 
-        # NEW: event that indicates a live socket is present
+        # event that indicates a live socket is present
         self._ws_ready = asyncio.Event()
+
+        # Flag to force a connection attempt even if power is off (manual reconnect)
+        self._force_connect = False
 
         # Diagnostics / Metrics
         self.reconnect_count = 0
@@ -95,6 +99,7 @@ class KClient:
         self._task = asyncio.create_task(self._loop(), name="K-ws-loop")
 
     async def stop(self) -> None:
+        """Stop the client and close connections."""
         self._stop.set()
         for t in (self._hb_task, self._tick_task):
             if t:
@@ -153,6 +158,7 @@ class KClient:
     async def reconnect(self):
         """Force a reconnection to the WebSocket server."""
         _LOGGER.info("Re-establishing WebSocket connection to retrieve latest state.")
+        self._force_connect = True
         await self.stop()
         await self.start()
 
@@ -175,11 +181,23 @@ class KClient:
         while not self._stop.is_set():
             # --- Power Saving Check (Start of Loop) ---
             # If printer is known to be powered off, sleep briefly and skip connection attempt
-            if self._check_power_status and self._check_power_status():
-                _LOGGER.debug("Printer power is OFF; sleeping 60s before next check host=%s", self._host)
-                # Reset backoff so we start fresh when power returns
-                backoff = RETRY_MIN_BACKOFF
-                connect_failures = 0
+            # UNLESS forced by user via Reconnect button
+            if self._force_connect:
+                _LOGGER.info("Forcing connection attempt (manual reconnect)")
+                self._force_connect = False
+                # bypass power check
+                if self._check_power_status:
+                    is_printer_off = self._check_power_status()
+                else:
+                    is_printer_off = False
+
+                if is_printer_off:
+                    _LOGGER.debug(
+                        "Printer power is OFF; sleeping 60s before next check host=%s", self._host
+                    )
+                    # Reset backoff so we start fresh when power returns
+                    backoff = RETRY_MIN_BACKOFF
+                    connect_failures = 0
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=10.0)
                 except asyncio.TimeoutError:
@@ -258,14 +276,19 @@ class KClient:
                 is_off = self._check_power_status and self._check_power_status()
                 
                 if is_off:
-                    _LOGGER.debug("K WS closed/failed (power OFF) host=%s reason=%s", self._host, exc)
+                    _LOGGER.debug(
+                        "K WS closed/failed (power OFF) host=%s reason=%s", self._host, exc
+                    )
                 elif self._is_benign_close(exc):
                     _LOGGER.debug("K WS closed host=%s reason=%s", self._host, exc)
                 else:
                     # Log a single warning after 3 failures (confirms it's not transient)
                     # All other failures are debug-only to avoid log spam
                     if connect_failures <= 3:
-                        _LOGGER.warning("K WS connection failed host=%s (printer likely off, retrying silently)", self._host)
+                        _LOGGER.warning(
+                            "K WS connection failed host=%s (printer likely off, retrying silently)",
+                            self._host
+                        )
                     else:
                         _LOGGER.debug("K WS connection error host=%s err=%s (attempt=%d)", self._host, exc, connect_failures)
                 self.last_error = str(exc)
@@ -292,10 +315,13 @@ class KClient:
                 now = time.monotonic()
                 if now - self._last_mdns_attempt > 3.0: # 3 seconds
                     self._last_mdns_attempt = now
-                    _LOGGER.warning("K WS connection failing repeatedly (host=%s). Attempting mDNS fallback...", self._host)
+                    _LOGGER.warning(
+                        "K WS connection failing repeatedly (host=%s). Attempting mDNS fallback...",
+                        self._host
+                    )
                     try:
-                        from .config_flow import _probe_tcp # Delayed import
-                        # Logic is handled by __init__.py Zeroconf listener, but we log explicitly here.
+                        from .config_flow import _probe_tcp  # Delayed import # pylint: disable=import-outside-toplevel
+                        # Logic is handled by __init__.py Zeroconf listener.
                         pass
                     except Exception as exc:
                         _LOGGER.debug("mDNS fallback attempt failed: %s", exc)
@@ -305,6 +331,7 @@ class KClient:
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_for)
             except asyncio.TimeoutError:
+                # Expected timeout
                 pass
             
             if not use_fixed_retry or connect_failures < 5:
@@ -446,4 +473,5 @@ class KClient:
 
     # ---------- health ----------
     def last_rx_monotonic(self) -> float:
+        """Return the monotonic time of the last received message."""
         return self._last_rx
