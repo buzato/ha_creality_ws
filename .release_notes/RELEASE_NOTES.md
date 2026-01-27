@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.9.2] - 2026-01-27
+> [List of issues (0.9.2)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.2
+
+### Added
+- **CFS Card Enhancement** (#70):
+  - **Mini Mode Filament Type**: Added a new valid option to show the filament material type (e.g., PLA, ASA) in the compact "Mini Mode" view.
+  - **Improved Rendering**: Enhanced the visual rendering of mini spools and improved click target areas for better usability.
+
 ## [0.9.1] - 2026-01-24
 > [List of issues (0.9.1)](https://github.com/3dg1luk43/ha_creality_ws/issues?q=is%3Aissue+milestone%3Av0.9.1
 
