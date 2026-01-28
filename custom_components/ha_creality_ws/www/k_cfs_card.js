@@ -8,6 +8,7 @@ class KCFSCard extends HTMLElement {
   constructor() {
     super();
     this._selectedCFS = 0; // Track selected CFS tab in normal mode
+    this._editingSlot = null; // Track which slot is being edited
   }
 
   static _sanitizeColor(value) {
@@ -488,6 +489,156 @@ class KCFSCard extends HTMLElement {
         color: var(--secondary-text-color);
         padding: 20px;
       }
+
+      /* === EDIT BUTTON === */
+      .edit-btn {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        width: 24px;
+        height: 24px;
+        background: rgba(var(--rgb-primary-text-color), 0.08);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        opacity: 0;
+        transition: all 0.3s ease;
+        z-index: 10;
+      }
+
+      .spool-card:hover .edit-btn,
+      .spool-mini-wrapper:hover .edit-btn {
+        opacity: 1;
+      }
+
+      .edit-btn:hover {
+        background: rgba(var(--rgb-primary-color), 0.2);
+        transform: scale(1.1);
+      }
+
+      .edit-btn ha-icon {
+        --mdc-icon-size: 16px;
+        color: var(--primary-color);
+      }
+
+      /* === EDIT DIALOG === */
+      .edit-dialog-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+      }
+
+      .edit-dialog {
+        background: var(--card-background-color);
+        border-radius: 24px;
+        padding: 24px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+
+      .dialog-header {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .dialog-close {
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+      }
+
+      .dialog-close:hover {
+        opacity: 1;
+      }
+
+      .form-field {
+        margin-bottom: 16px;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--secondary-text-color);
+        margin-bottom: 6px;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid rgba(var(--rgb-primary-text-color), 0.2);
+        border-radius: 8px;
+        background: rgba(var(--rgb-primary-text-color), 0.05);
+        color: var(--primary-text-color);
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .dialog-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .dialog-btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .dialog-btn-cancel {
+        background: rgba(var(--rgb-primary-text-color), 0.1);
+        color: var(--primary-text-color);
+      }
+
+      .dialog-btn-save {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .dialog-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .dialog-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
     `;
 
     this._root.innerHTML = `
@@ -797,10 +948,13 @@ class KCFSCard extends HTMLElement {
     const percentTextDisplay = hasFilament ? (slot.percentText || '—') : '—';
 
     const badge = isActive ? '<div class="status-badge"></div>' : '';
+    
+    const editBtn = `<div class="edit-btn" data-action="edit"><ha-icon icon="mdi:pencil"></ha-icon></div>`;
 
     return `
-      <div class="spool-card ${isActive ? 'active' : ''}" data-eid="${slot.entity_id}">
+      <div class="spool-card ${isActive ? 'active' : ''}" data-eid="${slot.entity_id}" data-box="${slot.boxId}" data-slot="${slot.id}">
         ${badge}
+        ${editBtn}
         <div class="ring-container">
           <div class="ring-outer" style="--spool-color: ${color}; --spool-pct: ${pct}%"></div>
           <div class="ring-inner">
@@ -868,6 +1022,20 @@ class KCFSCard extends HTMLElement {
       };
     });
 
+    // Edit buttons - intercept before spool card click
+    this._root.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const card = btn.closest('.spool-card');
+        if (card) {
+          const boxId = parseInt(card.dataset.box, 10);
+          const slotId = parseInt(card.dataset.slot, 10);
+          const eid = card.dataset.eid;
+          this._showEditDialog(boxId, slotId, eid);
+        }
+      };
+    });
+
     // Spool cards and mini spools - show more info
     this._root.querySelectorAll('.spool-card, .spool-mini, .spool-mini-wrapper .spool-mini, .external-normal, .external-compact').forEach(el => {
       const eid = el.dataset.eid;
@@ -881,6 +1049,200 @@ class KCFSCard extends HTMLElement {
         }));
       };
     });
+  }
+
+  _showEditDialog(boxId, slotId, entityId) {
+    if (!this._hass) return;
+
+    // Get current values from entity
+    const entity = this._hass.states[entityId];
+    const currentType = entity?.attributes?.type || "PLA";
+    const currentName = entity?.state || "Ender-PLA";
+    const currentColor = entity?.attributes?.color_hex || "#06c84ff";
+    const currentVendor = entity?.attributes?.vendor || "Creality";
+    const currentMinTemp = entity?.attributes?.min_temp || 190;
+    const currentMaxTemp = entity?.attributes?.max_temp || 240;
+    const currentPressure = entity?.attributes?.pressure || 0.04;
+
+    // Create dialog HTML
+    const dialogHtml = `
+      <div class="edit-dialog-overlay">
+        <div class="edit-dialog">
+          <div class="dialog-header">
+            <span>Edit Material - Box ${boxId + 1} Slot ${slotId + 1}</span>
+            <span class="dialog-close" id="dialog-close">✕</span>
+          </div>
+          <form id="edit-form">
+            <div class="form-field">
+              <label class="form-label">Material Type</label>
+              <input type="text" class="form-input" id="input-type" value="${currentType}" placeholder="PLA, PETG, ABS, etc." required>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Material Name</label>
+              <input type="text" class="form-input" id="input-name" value="${currentName}" placeholder="Ender-PLA" required>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Vendor/Brand</label>
+              <input type="text" class="form-input" id="input-vendor" value="${currentVendor}" placeholder="Creality">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Color (Hex)</label>
+              <input type="color" class="form-input" id="input-color" value="${currentColor}">
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label class="form-label">Min Temp (°C)</label>
+                <input type="number" class="form-input" id="input-mintemp" value="${currentMinTemp}" min="150" max="300" step="1">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Max Temp (°C)</label>
+                <input type="number" class="form-input" id="input-maxtemp" value="${currentMaxTemp}" min="150" max="350" step="1">
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Pressure Advance</label>
+              <input type="number" class="form-input" id="input-pressure" value="${currentPressure}" min="0" max="1" step="0.01">
+            </div>
+            <div class="dialog-actions">
+              <button type="button" class="dialog-btn dialog-btn-cancel" id="btn-cancel">Cancel</button>
+              <button type="submit" class="dialog-btn dialog-btn-save" id="btn-save">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    // Create dialog element
+    const dialogContainer = document.createElement('div');
+    dialogContainer.innerHTML = dialogHtml;
+    const dialogOverlay = dialogContainer.firstElementChild;
+    this._root.appendChild(dialogOverlay);
+
+    // Attach handlers
+    const closeDialog = () => {
+      dialogOverlay.remove();
+    };
+
+    dialogOverlay.querySelector('#dialog-close').onclick = closeDialog;
+    dialogOverlay.querySelector('#btn-cancel').onclick = closeDialog;
+    dialogOverlay.querySelector('.edit-dialog-overlay').onclick = (e) => {
+      if (e.target.classList.contains('edit-dialog-overlay')) {
+        closeDialog();
+      }
+    };
+
+    dialogOverlay.querySelector('#edit-form').onsubmit = async (e) => {
+      e.preventDefault();
+      
+      const formData = {
+        type: dialogOverlay.querySelector('#input-type').value,
+        name: dialogOverlay.querySelector('#input-name').value,
+        vendor: dialogOverlay.querySelector('#input-vendor').value,
+        color: dialogOverlay.querySelector('#input-color').value,
+        min_temp: parseFloat(dialogOverlay.querySelector('#input-mintemp').value),
+        max_temp: parseFloat(dialogOverlay.querySelector('#input-maxtemp').value),
+        pressure: parseFloat(dialogOverlay.querySelector('#input-pressure').value),
+      };
+
+      await this._saveMaterial(boxId, slotId, formData);
+      closeDialog();
+    };
+  }
+
+  async _saveMaterial(boxId, slotId, formData) {
+    if (!this._hass) return;
+
+    try {
+      // Get device_id from the first entity in this integration
+      // We need to find the device associated with this integration
+      const deviceId = await this._getDeviceId();
+      
+      if (!deviceId) {
+        alert('Could not find device ID. Please check your configuration.');
+        return;
+      }
+
+      const serviceData = {
+        device_id: deviceId,
+        box_id: boxId,
+        slot_id: slotId,
+        type: formData.type,
+        name: formData.name,
+        vendor: formData.vendor,
+        color: formData.color,
+        min_temp: formData.min_temp,
+        max_temp: formData.max_temp,
+        pressure: formData.pressure,
+      };
+
+      await this._hass.callService('ha_creality_ws', 'set_cfs_material', serviceData);
+      
+      // Show success feedback
+      this._showToast('Material settings saved successfully!');
+      
+      // Request updated CFS info after a short delay
+      setTimeout(async () => {
+        await this._hass.callService('ha_creality_ws', 'request_cfs_info', { device_id: deviceId });
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Failed to save material:', error);
+      alert(`Failed to save material: ${error.message}`);
+    }
+  }
+
+  async _getDeviceId() {
+    // Try to get device_id from any sensor entity in this card's config
+    const states = this._hass.states;
+    
+    // Check all configured entities to find one with a device_id
+    for (let box = 0; box < 4; box++) {
+      for (let slot = 0; slot < 4; slot++) {
+        const filamentEid = this._cfg[`box${box}_slot${slot}_filament`];
+        if (filamentEid && states[filamentEid]) {
+          const entity = states[filamentEid];
+          // Get device_id from entity registry (if available via hass.entities)
+          if (entity.attributes?.device_id) {
+            return entity.attributes.device_id;
+          }
+        }
+      }
+    }
+    
+    // Fallback: try to get it from entity registry
+    // This is a workaround - in production, you might want to store device_id in card config
+    try {
+      const entities = await this._hass.callWS({ type: 'config/entity_registry/list' });
+      for (const entityEntry of entities) {
+        if (entityEntry.platform === 'ha_creality_ws' && entityEntry.device_id) {
+          return entityEntry.device_id;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get device_id from entity registry:', e);
+    }
+    
+    return null;
+  }
+
+  _showToast(message) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--primary-color);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
   }
 
   getCardSize() {
