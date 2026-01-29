@@ -479,7 +479,7 @@ async def _register_custom_services(hass: HomeAssistant) -> None:
             "type": call.data.get("type", "PLA"),
             "vendor": call.data.get("vendor", "Creality"),
             "name": call.data.get("name", "Ender-PLA"),
-            "color": call.data.get("color", "#06c84ff"),
+            "color": call.data.get("color", "#06c84f"),
             "minTemp": float(call.data.get("min_temp", 190.0)),
             "maxTemp": float(call.data.get("max_temp", 240.0)),
             "pressure": float(call.data.get("pressure", 0.04)),

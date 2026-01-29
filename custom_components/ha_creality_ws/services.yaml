@@ -35,13 +35,13 @@ set_cfs_material:
           integration: ha_creality_ws
     box_id:
       name: Box ID
-      description: CFS box number (0-3).
+      description: CFS box number (1-4). Use 0 for external filament.
       required: true
       default: 0
       selector:
         number:
           min: 0
-          max: 3
+          max: 4
           mode: box
     slot_id:
       name: Slot ID
@@ -76,9 +76,9 @@ set_cfs_material:
         text:
     color:
       name: Color
-      description: Filament color in hex format (e.g., #FF0000).
+      description: Filament color in hex format (e.g., #06c84f).
       required: true
-      default: "#06c84ff"
+      default: "#06c84f"
       selector:
         color_rgb:
     min_temp:

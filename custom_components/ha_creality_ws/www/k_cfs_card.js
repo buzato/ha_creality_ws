@@ -1721,41 +1721,35 @@ class KCFSCard extends HTMLElement {
 
     // Create modal overlay
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    overlay.style.zIndex = '1000';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.backdropFilter = 'blur(4px)';
+    overlay.className = 'edit-dialog-overlay';
     
     // Create dialog container
     const dialog = document.createElement('div');
-    dialog.style.backgroundColor = 'var(--card-background-color)';
-    dialog.style.borderRadius = '12px';
-    dialog.style.padding = '24px';
-    dialog.style.maxWidth = '500px';
-    dialog.style.width = '90%';
-    dialog.style.maxHeight = '90vh';
-    dialog.style.overflow = 'auto';
-    dialog.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
+    dialog.className = 'edit-dialog';
     
     // Create dialog header
-    const header = document.createElement('h2');
+    const header = document.createElement('div');
+    header.className = 'dialog-header';
+    
+    const headerText = document.createElement('span');
     // Check if it's external filament (boxId and slotId are -1)
     if (boxId === -1 && slotId === -1) {
-      header.textContent = 'Edit Material - External Filament';
+      headerText.textContent = 'Edit Material - External Filament';
     } else {
-      header.textContent = `Edit Material - Box ${boxId + 1} Slot ${slotId + 1}`;
+      headerText.textContent = `Edit Material - Box ${boxId + 1} Slot ${slotId + 1}`;
     }
-    header.style.margin = '0 0 20px 0';
-    header.style.color = 'var(--primary-text-color)';
-    header.style.fontSize = '20px';
-    header.style.fontWeight = '600';
+    
+    const closeBtn = document.createElement('ha-icon');
+    closeBtn.setAttribute('icon', 'mdi:close');
+    closeBtn.className = 'dialog-close';
+    closeBtn.onclick = () => {
+      if (document.body.contains(overlay)) {
+        document.body.removeChild(overlay);
+      }
+    };
+    
+    header.appendChild(headerText);
+    header.appendChild(closeBtn);
     
     // Create form content
     const form = this._renderEditForm(boxId, slotId, {
@@ -1797,183 +1791,150 @@ class KCFSCard extends HTMLElement {
     const container = document.createElement('div');
     
     // Type field
+    const typeField = document.createElement('div');
+    typeField.className = 'form-field';
+    
     const typeLabel = document.createElement('label');
+    typeLabel.className = 'form-label';
     typeLabel.textContent = 'Material Type';
-    typeLabel.style.display = 'block';
-    typeLabel.style.marginTop = '16px';
-    typeLabel.style.marginBottom = '8px';
-    typeLabel.style.fontWeight = '500';
     
     const typeInput = document.createElement('input');
+    typeInput.className = 'form-input';
     typeInput.type = 'text';
     typeInput.value = values.type;
     typeInput.id = 'input-type';
     typeInput.placeholder = 'PLA, PETG, ABS, etc.';
-    typeInput.style.width = '100%';
-    typeInput.style.padding = '8px';
-    typeInput.style.border = '1px solid var(--divider-color)';
-    typeInput.style.borderRadius = '4px';
-    typeInput.style.backgroundColor = 'var(--card-background-color)';
-    typeInput.style.color = 'var(--primary-text-color)';
-    typeInput.style.boxSizing = 'border-box';
+    
+    typeField.appendChild(typeLabel);
+    typeField.appendChild(typeInput);
     
     // Name field
+    const nameField = document.createElement('div');
+    nameField.className = 'form-field';
+    
     const nameLabel = document.createElement('label');
+    nameLabel.className = 'form-label';
     nameLabel.textContent = 'Material Name';
-    nameLabel.style.display = 'block';
-    nameLabel.style.marginTop = '16px';
-    nameLabel.style.marginBottom = '8px';
-    nameLabel.style.fontWeight = '500';
     
     const nameInput = document.createElement('input');
+    nameInput.className = 'form-input';
     nameInput.type = 'text';
     nameInput.value = values.name;
     nameInput.id = 'input-name';
     nameInput.placeholder = 'Ender-PLA';
-    nameInput.style.width = '100%';
-    nameInput.style.padding = '8px';
-    nameInput.style.border = '1px solid var(--divider-color)';
-    nameInput.style.borderRadius = '4px';
-    nameInput.style.backgroundColor = 'var(--card-background-color)';
-    nameInput.style.color = 'var(--primary-text-color)';
-    nameInput.style.boxSizing = 'border-box';
+    
+    nameField.appendChild(nameLabel);
+    nameField.appendChild(nameInput);
     
     // Vendor field
+    const vendorField = document.createElement('div');
+    vendorField.className = 'form-field';
+    
     const vendorLabel = document.createElement('label');
+    vendorLabel.className = 'form-label';
     vendorLabel.textContent = 'Vendor/Brand';
-    vendorLabel.style.display = 'block';
-    vendorLabel.style.marginTop = '16px';
-    vendorLabel.style.marginBottom = '8px';
-    vendorLabel.style.fontWeight = '500';
     
     const vendorInput = document.createElement('input');
+    vendorInput.className = 'form-input';
     vendorInput.type = 'text';
     vendorInput.value = values.vendor;
     vendorInput.id = 'input-vendor';
     vendorInput.placeholder = 'Creality';
-    vendorInput.style.width = '100%';
-    vendorInput.style.padding = '8px';
-    vendorInput.style.border = '1px solid var(--divider-color)';
-    vendorInput.style.borderRadius = '4px';
-    vendorInput.style.backgroundColor = 'var(--card-background-color)';
-    vendorInput.style.color = 'var(--primary-text-color)';
-    vendorInput.style.boxSizing = 'border-box';
+    
+    vendorField.appendChild(vendorLabel);
+    vendorField.appendChild(vendorInput);
     
     // Color field
+    const colorField = document.createElement('div');
+    colorField.className = 'form-field';
+    
     const colorLabel = document.createElement('label');
+    colorLabel.className = 'form-label';
     colorLabel.textContent = 'Color';
-    colorLabel.style.display = 'block';
-    colorLabel.style.marginTop = '16px';
-    colorLabel.style.marginBottom = '8px';
-    colorLabel.style.fontWeight = '500';
     
     const colorInput = document.createElement('input');
+    colorInput.className = 'form-input';
     colorInput.type = 'color';
     colorInput.value = values.color;
     colorInput.id = 'input-color';
-    colorInput.style.width = '100%';
     colorInput.style.height = '40px';
-    colorInput.style.border = '1px solid var(--divider-color)';
-    colorInput.style.borderRadius = '4px';
     colorInput.style.cursor = 'pointer';
+    
+    colorField.appendChild(colorLabel);
+    colorField.appendChild(colorInput);
     
     // Temperature row
     const tempRow = document.createElement('div');
-    tempRow.style.display = 'grid';
-    tempRow.style.gridTemplateColumns = '1fr 1fr';
-    tempRow.style.gap = '12px';
-    tempRow.style.marginTop = '16px';
+    tempRow.className = 'form-row';
     
-    const minTempContainer = document.createElement('div');
+    const minTempField = document.createElement('div');
+    minTempField.className = 'form-field';
+    
     const minTempLabel = document.createElement('label');
+    minTempLabel.className = 'form-label';
     minTempLabel.textContent = 'Min Temp (°C)';
-    minTempLabel.style.display = 'block';
-    minTempLabel.style.marginBottom = '8px';
-    minTempLabel.style.fontWeight = '500';
     
     const minTempInput = document.createElement('input');
+    minTempInput.className = 'form-input';
     minTempInput.type = 'number';
     minTempInput.value = values.minTemp;
     minTempInput.id = 'input-mintemp';
     minTempInput.min = '150';
     minTempInput.max = '300';
     minTempInput.step = '1';
-    minTempInput.style.width = '100%';
-    minTempInput.style.padding = '8px';
-    minTempInput.style.border = '1px solid var(--divider-color)';
-    minTempInput.style.borderRadius = '4px';
-    minTempInput.style.backgroundColor = 'var(--card-background-color)';
-    minTempInput.style.color = 'var(--primary-text-color)';
-    minTempInput.style.boxSizing = 'border-box';
     
-    const maxTempContainer = document.createElement('div');
+    minTempField.appendChild(minTempLabel);
+    minTempField.appendChild(minTempInput);
+    
+    const maxTempField = document.createElement('div');
+    maxTempField.className = 'form-field';
+    
     const maxTempLabel = document.createElement('label');
+    maxTempLabel.className = 'form-label';
     maxTempLabel.textContent = 'Max Temp (°C)';
-    maxTempLabel.style.display = 'block';
-    maxTempLabel.style.marginBottom = '8px';
-    maxTempLabel.style.fontWeight = '500';
     
     const maxTempInput = document.createElement('input');
+    maxTempInput.className = 'form-input';
     maxTempInput.type = 'number';
     maxTempInput.value = values.maxTemp;
     maxTempInput.id = 'input-maxtemp';
     maxTempInput.min = '150';
     maxTempInput.max = '350';
     maxTempInput.step = '1';
-    maxTempInput.style.width = '100%';
-    maxTempInput.style.padding = '8px';
-    maxTempInput.style.border = '1px solid var(--divider-color)';
-    maxTempInput.style.borderRadius = '4px';
-    maxTempInput.style.backgroundColor = 'var(--card-background-color)';
-    maxTempInput.style.color = 'var(--primary-text-color)';
-    maxTempInput.style.boxSizing = 'border-box';
     
-    minTempContainer.appendChild(minTempLabel);
-    minTempContainer.appendChild(minTempInput);
-    maxTempContainer.appendChild(maxTempLabel);
-    maxTempContainer.appendChild(maxTempInput);
-    tempRow.appendChild(minTempContainer);
-    tempRow.appendChild(maxTempContainer);
+    maxTempField.appendChild(maxTempLabel);
+    maxTempField.appendChild(maxTempInput);
+    
+    tempRow.appendChild(minTempField);
+    tempRow.appendChild(maxTempField);
     
     // Pressure field
+    const pressureField = document.createElement('div');
+    pressureField.className = 'form-field';
+    
     const pressureLabel = document.createElement('label');
+    pressureLabel.className = 'form-label';
     pressureLabel.textContent = 'Pressure Advance';
-    pressureLabel.style.display = 'block';
-    pressureLabel.style.marginTop = '16px';
-    pressureLabel.style.marginBottom = '8px';
-    pressureLabel.style.fontWeight = '500';
     
     const pressureInput = document.createElement('input');
+    pressureInput.className = 'form-input';
     pressureInput.type = 'number';
     pressureInput.value = values.pressure;
     pressureInput.id = 'input-pressure';
     pressureInput.min = '0';
     pressureInput.max = '1';
     pressureInput.step = '0.01';
-    pressureInput.style.width = '100%';
-    pressureInput.style.padding = '8px';
-    pressureInput.style.border = '1px solid var(--divider-color)';
-    pressureInput.style.borderRadius = '4px';
-    pressureInput.style.backgroundColor = 'var(--card-background-color)';
-    pressureInput.style.color = 'var(--primary-text-color)';
-    pressureInput.style.boxSizing = 'border-box';
+    
+    pressureField.appendChild(pressureLabel);
+    pressureField.appendChild(pressureInput);
     
     // Buttons
     const buttonRow = document.createElement('div');
-    buttonRow.style.display = 'flex';
-    buttonRow.style.gap = '12px';
-    buttonRow.style.marginTop = '24px';
-    buttonRow.style.justifyContent = 'flex-end';
+    buttonRow.className = 'dialog-actions';
     
     const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'dialog-btn dialog-btn-cancel';
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.padding = '10px 20px';
-    cancelBtn.style.border = 'none';
-    cancelBtn.style.borderRadius = '4px';
-    cancelBtn.style.cursor = 'pointer';
-    cancelBtn.style.backgroundColor = 'transparent';
-    cancelBtn.style.color = 'var(--primary-color)';
-    cancelBtn.style.fontWeight = '500';
     cancelBtn.onclick = () => {
       if (document.body.contains(overlay)) {
         document.body.removeChild(overlay);
@@ -1981,15 +1942,9 @@ class KCFSCard extends HTMLElement {
     };
     
     const saveBtn = document.createElement('button');
+    saveBtn.className = 'dialog-btn dialog-btn-save';
     saveBtn.textContent = 'Save';
     saveBtn.id = 'btn-save';
-    saveBtn.style.padding = '10px 20px';
-    saveBtn.style.border = 'none';
-    saveBtn.style.borderRadius = '4px';
-    saveBtn.style.cursor = 'pointer';
-    saveBtn.style.backgroundColor = 'var(--primary-color)';
-    saveBtn.style.color = 'var(--text-primary-color, white)';
-    saveBtn.style.fontWeight = '500';
     saveBtn.onclick = async () => {
       console.log('Save button clicked');
       saveBtn.disabled = true;
@@ -2024,17 +1979,12 @@ class KCFSCard extends HTMLElement {
     buttonRow.appendChild(saveBtn);
     
     // Assemble form
-    container.appendChild(typeLabel);
-    container.appendChild(typeInput);
-    container.appendChild(nameLabel);
-    container.appendChild(nameInput);
-    container.appendChild(vendorLabel);
-    container.appendChild(vendorInput);
-    container.appendChild(colorLabel);
-    container.appendChild(colorInput);
+    container.appendChild(typeField);
+    container.appendChild(nameField);
+    container.appendChild(vendorField);
+    container.appendChild(colorField);
     container.appendChild(tempRow);
-    container.appendChild(pressureLabel);
-    container.appendChild(pressureInput);
+    container.appendChild(pressureField);
     container.appendChild(buttonRow);
     
     return container;
