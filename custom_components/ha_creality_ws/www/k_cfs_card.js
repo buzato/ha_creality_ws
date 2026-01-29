@@ -9,6 +9,22 @@ class KCFSCard extends HTMLElement {
     super();
     this._selectedCFS = 0; // Track selected CFS tab in normal mode
     this._editingSlot = null; // Track which slot is being edited
+    // Calculate base path for resources
+    this._basePath = this._getBasePath();
+  }
+
+  _getBasePath() {
+    // Try to find the script's path from document scripts
+    const scripts = document.getElementsByTagName('script');
+    for (let script of scripts) {
+      if (script.src && script.src.includes('k_cfs_card.js')) {
+        const fullPath = script.src.substring(0, script.src.lastIndexOf('/'));
+        // Remove query parameters if present
+        return fullPath.split('?')[0];
+      }
+    }
+    // Fallback to integration path
+    return '/ha_creality_ws';
   }
 
   static _sanitizeColor(value) {
@@ -583,6 +599,59 @@ class KCFSCard extends HTMLElement {
 
   .spool-overlay:hover {
     transform: scale(1.05);
+  }
+
+  .spool-overlay .edit-btn-mini {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    background: rgba(var(--rgb-card-background-color), 0.95);
+    border: 1px solid rgba(var(--rgb-primary-text-color), 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+    z-index: 10;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .spool-overlay:hover .edit-btn-mini {
+    opacity: 1;
+  }
+
+  .spool-overlay .edit-btn-mini:hover {
+    background: rgba(var(--rgb-primary-color), 0.15);
+    transform: scale(1.15);
+    border-color: var(--primary-color);
+  }
+
+  .spool-overlay .edit-btn-mini.disabled {
+    opacity: 0.3 !important;
+    cursor: not-allowed;
+    background: rgba(var(--rgb-primary-text-color), 0.05);
+  }
+
+  .spool-overlay .edit-btn-mini.disabled:hover {
+    transform: none;
+    border-color: rgba(var(--rgb-primary-text-color), 0.1);
+  }
+
+  .spool-overlay .edit-btn-mini ha-icon {
+    --mdc-icon-size: 12px;
+    color: var(--primary-color);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .spool-overlay .edit-btn-mini.disabled ha-icon {
+    color: var(--secondary-text-color);
   }
 
   /* Position overlays over each of the 4 spools */
@@ -1215,19 +1284,19 @@ class KCFSCard extends HTMLElement {
       const displayName = hasFilament ? `${safeName} ${safeType}` : '—';
       
       const isPrinterBusy = this._isPrinterBusy();
-      const editBtnClass = isPrinterBusy ? 'edit-btn disabled' : 'edit-btn';
+      const editBtnClass = isPrinterBusy ? 'edit-btn-mini disabled' : 'edit-btn-mini';
       const editIcon = isPrinterBusy ? 'mdi:lock' : 'mdi:pencil';
       const editBtn = `<div class="${editBtnClass}" data-action="edit"><ha-icon icon="${editIcon}"></ha-icon></div>`;
       
       externalSection = `
         <div class="external-section">
           <div class="external-normal" data-eid="${external.entity_id}" data-box="-1" data-slot="-1">
-            
-            <div class="ext-icon">${editBtn}EXT</div>
+            ${editBtn}
+            <div class="ext-icon" style="background: ${color}">EXT</div>
             <div class="ext-info">
               <div class="ext-name">${displayName}</div>
               <div class="ext-bar">
-                <div class="ext-fill" style="width: ${pct}%"></div>
+                <div class="ext-fill" style="width: ${pct}%; background: ${color}"></div>
               </div>
             </div>
             <div class="ext-percent">${percentTextDisplay}</div>
@@ -1262,6 +1331,7 @@ class KCFSCard extends HTMLElement {
       const hasFilament = safeType !== "—" && safeName !== "—";
       const percentTextDisplay = hasFilament ? (external.percentText || '—') : '—';
       const displayName = hasFilament ? `${safeName} ${safeType}` : '—';
+      const color = external.color || '#cccccc';
       
       const isPrinterBusy = this._isPrinterBusy();
       const editBtnClass = isPrinterBusy ? 'edit-btn-mini disabled' : 'edit-btn-mini';
@@ -1272,7 +1342,7 @@ class KCFSCard extends HTMLElement {
         <div class="external-section">
           <div class="external-compact" data-eid="${external.entity_id}" data-box="-1" data-slot="-1">
             ${editBtn}
-            <div class="ext-dot">EXT</div>
+            <div class="ext-dot" style="background: conic-gradient(${color} 100%, rgba(var(--rgb-primary-text-color), 0.1) 0)">EXT</div>
             <div class="ext-compact-info">
               <div>${displayName}</div>
               <div>${percentTextDisplay}</div>
@@ -1450,7 +1520,7 @@ class KCFSCard extends HTMLElement {
 
       boxView = `
         <div class="box-view-container">
-          <img src="/hacsfiles/ha_creality_ws/cfs_box.png" alt="CFS Box" class="box-image" />
+          <img src="${this._basePath}/cfs_box.png" alt="CFS Box" class="box-image" />
           <div class="box-overlays">
             ${selectedBox.slots.map((slot, idx) => this._renderSpoolOverlay(slot, idx)).join('')}
             ${envInfo}
@@ -1468,20 +1538,22 @@ class KCFSCard extends HTMLElement {
       const pct = hasFilament && external.percent !== null ? external.percent : 0;
       const percentTextDisplay = hasFilament ? (external.percentText || '—') : '—';
       const displayName = hasFilament ? `${safeName} ${safeType}` : '—';
+      const color = external.color || '#cccccc';
       
       const isPrinterBusy = this._isPrinterBusy();
-      const editBtnClass = isPrinterBusy ? 'edit-btn disabled' : 'edit-btn';
+      const editBtnClass = isPrinterBusy ? 'edit-btn-mini disabled' : 'edit-btn-mini';
       const editIcon = isPrinterBusy ? 'mdi:lock' : 'mdi:pencil';
       const editBtn = `<div class="${editBtnClass}" data-action="edit"><ha-icon icon="${editIcon}"></ha-icon></div>`;
       
       externalSection = `
         <div class="external-section">
           <div class="external-normal" data-eid="${external.entity_id}" data-box="-1" data-slot="-1">
-            <div class="ext-icon">${editBtn}EXT</div>
+            ${editBtn}
+            <div class="ext-icon" style="background: ${color}">EXT</div>
             <div class="ext-info">
               <div class="ext-name">${displayName}</div>
               <div class="ext-bar">
-                <div class="ext-fill" style="width: ${pct}%"></div>
+                <div class="ext-fill" style="width: ${pct}%; background: ${color}"></div>
               </div>
             </div>
             <div class="ext-percent">${percentTextDisplay}</div>
@@ -1508,7 +1580,7 @@ class KCFSCard extends HTMLElement {
     const pctDisplay = hasFilament && slot.percent !== null ? Math.round(slot.percent) : 0;
 
     const isPrinterBusy = this._isPrinterBusy();
-    const editBtnClass = isPrinterBusy ? 'edit-btn disabled' : 'edit-btn';
+    const editBtnClass = isPrinterBusy ? 'edit-btn-mini disabled' : 'edit-btn-mini';
     const editIcon = isPrinterBusy ? 'mdi:lock' : 'mdi:pencil';
     const editBtn = `<div class="${editBtnClass}" data-action="edit"><ha-icon icon="${editIcon}"></ha-icon></div>`;
 
@@ -1573,7 +1645,7 @@ class KCFSCard extends HTMLElement {
           return;
         }
         
-        const container = btn.closest('.spool-mini-wrapper, .spool-mini-container, .external-compact');
+        const container = btn.closest('.spool-mini-wrapper, .spool-mini-container, .external-compact, .spool-overlay, .external-normal');
         if (container) {
           const boxId = parseInt(container.dataset.box, 10);
           const slotId = parseInt(container.dataset.slot, 10);
@@ -1987,10 +2059,13 @@ class KCFSCard extends HTMLElement {
         return;
       }
 
+      // For external filament: boxId = -1, slotId = -1 -> send box_id: 0, slot_id: 0
+      // For CFS filaments: boxId = 0-3, slotId = 0-3 -> send box_id: boxId+1, slot_id: slotId+1
+      const isExternal = (boxId === -1 && slotId === -1);
       const serviceData = {
         device_id: deviceId,
-        box_id: boxId,
-        slot_id: slotId,
+        box_id: isExternal ? 0 : (boxId + 1),
+        slot_id: isExternal ? 0 : (slotId + 1),
         type: formData.type,
         name: formData.name,
         vendor: formData.vendor,
