@@ -270,8 +270,8 @@ class KCFSCard extends HTMLElement {
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       }
 
-      /* === NORMAL MODE === */
-      .normal-mode {}
+      /* === FULL MODE === */
+      .full-mode {}
 
       .header {
         display: flex;
@@ -1282,6 +1282,7 @@ class KCFSCard extends HTMLElement {
       const pct = hasFilament && external.percent !== null ? external.percent : 0;
       const percentTextDisplay = hasFilament ? (external.percentText || '—') : '—';
       const displayName = hasFilament ? `${safeName} ${safeType}` : '—';
+      const color = external.color || '#cccccc';
       
       const isPrinterBusy = this._isPrinterBusy();
       const editBtnClass = isPrinterBusy ? 'edit-btn-mini disabled' : 'edit-btn-mini';
@@ -2060,12 +2061,12 @@ class KCFSCard extends HTMLElement {
       }
 
       // For external filament: boxId = -1, slotId = -1 -> send box_id: 0, slot_id: 0
-      // For CFS filaments: boxId = 0-3, slotId = 0-3 -> send box_id: boxId+1, slot_id: slotId+1
+      // For CFS filaments: boxId = 0-3, slotId = 0-3 -> send box_id: boxId+1, slot_id: slotId
       const isExternal = (boxId === -1 && slotId === -1);
       const serviceData = {
         device_id: deviceId,
         box_id: isExternal ? 0 : (boxId + 1),
-        slot_id: isExternal ? 0 : (slotId + 1),
+        slot_id: isExternal ? 0 : slotId,
         type: formData.type,
         name: formData.name,
         vendor: formData.vendor,
