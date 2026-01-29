@@ -655,10 +655,10 @@ class KCFSCard extends HTMLElement {
   }
 
   /* Position overlays over each of the 4 spools */
-  .spool-overlay:nth-child(1) { left: 15%; top: 25%; width: 15%; height: 40%; }
-  .spool-overlay:nth-child(2) { left: 33%; top: 25%; width: 15%; height: 40%; }
-  .spool-overlay:nth-child(3) { left: 51%; top: 25%; width: 15%; height: 40%; }
-  .spool-overlay:nth-child(4) { left: 69%; top: 25%; width: 15%; height: 40%; }
+  .spool-overlay:nth-child(1) { left: 15%; top: 10%; width: 15%; height: 40%; }
+  .spool-overlay:nth-child(2) { left: 33%; top: 10%; width: 15%; height: 40%; }
+  .spool-overlay:nth-child(3) { left: 51%; top: 10%; width: 15%; height: 40%; }
+  .spool-overlay:nth-child(4) { left: 69%; top: 10%; width: 15%; height: 40%; }
 
   .spool-indicator {
     width: 100%;
@@ -710,7 +710,7 @@ class KCFSCard extends HTMLElement {
 
   .box-env-info {
     position: absolute;
-    bottom: 25%;
+    bottom: 13%;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
