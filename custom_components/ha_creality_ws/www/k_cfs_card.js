@@ -4,6 +4,111 @@ const EDITOR_TAG = "k-cfs-card-editor";
 
 const mdi = (name) => `mdi:${name}`;
 
+// ===== CREALITY STANDARD COLORS & PRESETS SYSTEM =====
+// Official Creality filament color palette
+const CREALITY_STANDARD_COLORS = {
+  "Red": "#e53935",
+  "Green": "#06c84f",
+  "Blue": "#1e88e5",
+  "Yellow": "#fdd835",
+  "Orange": "#fb8c00",
+  "Purple": "#8e24aa",
+  "Pink": "#ec407a",
+  "White": "#ffffff",
+  "Black": "#000000",
+  "Gray": "#9e9e9e",
+  "Cyan": "#00acc1",
+  "Lime": "#9ccc65",
+};
+
+// Storage keys for presets
+const PRESETS_STORAGE_KEY = "k-cfs-color-presets";
+
+/**
+ * Color Presets Manager - Handles saving, loading, and managing custom color presets
+ */
+class ColorPresetsManager {
+  constructor() {
+    this.presets = this._loadPresets();
+  }
+
+  _loadPresets() {
+    try {
+      const stored = localStorage.getItem(PRESETS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      console.warn("Failed to load color presets from localStorage:", e);
+      return {};
+    }
+  }
+
+  _savePresets() {
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(this.presets));
+    } catch (e) {
+      console.warn("Failed to save color presets to localStorage:", e);
+    }
+  }
+
+  savePreset(name, color) {
+    if (!name || !color) return false;
+    const sanitizedColor = this._sanitizeColor(color);
+    this.presets[name] = sanitizedColor;
+    this._savePresets();
+    return true;
+  }
+
+  deletePreset(name) {
+    if (this.presets[name]) {
+      delete this.presets[name];
+      this._savePresets();
+      return true;
+    }
+    return false;
+  }
+
+  renamePreset(oldName, newName) {
+    if (!this.presets[oldName] || !newName) return false;
+    this.presets[newName] = this.presets[oldName];
+    delete this.presets[oldName];
+    this._savePresets();
+    return true;
+  }
+
+  getPresets() {
+    return { ...this.presets };
+  }
+
+  getStandardColors() {
+    return { ...CREALITY_STANDARD_COLORS };
+  }
+
+  getAllColors() {
+    return {
+      ...this.getStandardColors(),
+      ...this.getPresets()
+    };
+  }
+
+  _sanitizeColor(value) {
+    const raw = String(value || "").trim();
+    if (!raw || ["unknown", "unavailable", "—"].includes(raw.toLowerCase())) {
+      return "#cccccc";
+    }
+    const hex = raw.startsWith("#") ? raw.slice(1) : raw;
+    if (hex.length === 6 && /^[0-9a-fA-F]+$/.test(hex)) {
+      return `#${hex.toLowerCase()}`;
+    }
+    if (hex.length === 3 && /^[0-9a-fA-F]+$/.test(hex)) {
+      return `#${hex.toLowerCase()}`;
+    }
+    if (hex.length === 7 && hex.startsWith("0") && /^[0-9a-fA-F]+$/.test(hex)) {
+      return `#${hex.slice(1).toLowerCase()}`;
+    }
+    return "#cccccc";
+  }
+}
+
 class KCFSCard extends HTMLElement {
   constructor() {
     super();
@@ -11,6 +116,8 @@ class KCFSCard extends HTMLElement {
     this._editingSlot = null; // Track which slot is being edited
     // Calculate base path for resources
     this._basePath = this._getBasePath();
+    // Initialize presets manager
+    this._presetsManager = new ColorPresetsManager();
   }
 
   _getBasePath() {
@@ -1748,19 +1855,20 @@ class KCFSCard extends HTMLElement {
       }
     };
     
-    header.appendChild(headerText);
-    header.appendChild(closeBtn);
-    
-    // Create form content
-    const form = this._renderEditForm(boxId, slotId, {
-      type: currentType,
-      name: currentName,
-      color: currentColor,
-      vendor: currentVendor,
-      minTemp: currentMinTemp,
-      maxTemp: currentMaxTemp,
-      pressure: currentPressure
-    }, overlay);
+     header.appendChild(headerText);
+     header.appendChild(closeBtn);
+     
+     // Create form content
+     const form = this._renderEditForm(boxId, slotId, {
+       entity_id: entityId,
+       type: currentType,
+       name: currentName,
+       color: currentColor,
+       vendor: currentVendor,
+       minTemp: currentMinTemp,
+       maxTemp: currentMaxTemp,
+       pressure: currentPressure
+     }, overlay);
     
     dialog.appendChild(header);
     dialog.appendChild(form);
@@ -1844,24 +1952,114 @@ class KCFSCard extends HTMLElement {
     vendorField.appendChild(vendorLabel);
     vendorField.appendChild(vendorInput);
     
-    // Color field
-    const colorField = document.createElement('div');
-    colorField.className = 'form-field';
-    
-    const colorLabel = document.createElement('label');
-    colorLabel.className = 'form-label';
-    colorLabel.textContent = 'Color';
-    
-    const colorInput = document.createElement('input');
-    colorInput.className = 'form-input';
-    colorInput.type = 'color';
-    colorInput.value = values.color;
-    colorInput.id = 'input-color';
-    colorInput.style.height = '40px';
-    colorInput.style.cursor = 'pointer';
-    
-    colorField.appendChild(colorLabel);
-    colorField.appendChild(colorInput);
+     // Color field with presets
+     const colorField = document.createElement('div');
+     colorField.className = 'form-field';
+     
+     const colorLabel = document.createElement('label');
+     colorLabel.className = 'form-label';
+     colorLabel.textContent = 'Color (with Presets)';
+     colorField.appendChild(colorLabel);
+
+     // Color presets container
+     const presetsContainer = document.createElement('div');
+     presetsContainer.style.marginBottom = '10px';
+     presetsContainer.style.display = 'flex';
+     presetsContainer.style.flexWrap = 'wrap';
+     presetsContainer.style.gap = '8px';
+     presetsContainer.style.alignItems = 'center';
+
+     // Add preset buttons (Creality standards + custom)
+     const allColors = this._presetsManager.getAllColors();
+     const standardColors = this._presetsManager.getStandardColors();
+     const customPresets = this._presetsManager.getPresets();
+
+     // Group buttons: Standard first, then custom
+     const addPresetButtons = (colors, isCustom = false) => {
+       Object.entries(colors).forEach(([name, hex]) => {
+         const btn = document.createElement('button');
+         btn.type = 'button';
+         btn.style.width = '28px';
+         btn.style.height = '28px';
+         btn.style.padding = '0';
+         btn.style.border = '2px solid transparent';
+         btn.style.borderRadius = '4px';
+         btn.style.background = hex;
+         btn.style.cursor = 'pointer';
+         btn.style.transition = 'all 0.2s';
+         btn.title = `${name}${isCustom ? ' (Custom)' : ''}`;
+         btn.onclick = () => {
+           colorInput.value = hex;
+           // Highlight selected button
+           document.querySelectorAll('[data-preset-btn]').forEach(b => {
+             b.style.borderColor = 'transparent';
+           });
+           btn.style.borderColor = 'var(--primary-text-color)';
+         };
+         btn.setAttribute('data-preset-btn', '1');
+         presetsContainer.appendChild(btn);
+       });
+     };
+
+     addPresetButtons(standardColors, false);
+
+     // Separator for custom presets
+     if (Object.keys(customPresets).length > 0) {
+       const separator = document.createElement('div');
+       separator.style.width = '100%';
+       separator.style.height = '1px';
+       separator.style.background = 'rgba(var(--rgb-primary-text-color), 0.1)';
+       presetsContainer.appendChild(separator);
+       addPresetButtons(customPresets, true);
+     }
+
+     colorField.appendChild(presetsContainer);
+
+     // Color input + preset management
+     const colorInputContainer = document.createElement('div');
+     colorInputContainer.style.display = 'grid';
+     colorInputContainer.style.gridTemplateColumns = '1fr auto';
+     colorInputContainer.style.gap = '8px';
+     colorInputContainer.style.alignItems = 'center';
+
+     const colorInput = document.createElement('input');
+     colorInput.className = 'form-input';
+     colorInput.type = 'color';
+     colorInput.value = values.color;
+     colorInput.id = 'input-color';
+     colorInput.style.height = '40px';
+     colorInput.style.cursor = 'pointer';
+     colorInputContainer.appendChild(colorInput);
+
+     // Save as preset button
+     const savePresetBtn = document.createElement('button');
+     savePresetBtn.type = 'button';
+     savePresetBtn.style.padding = '8px 12px';
+     savePresetBtn.style.background = 'var(--primary-color)';
+     savePresetBtn.style.color = 'white';
+     savePresetBtn.style.border = 'none';
+     savePresetBtn.style.borderRadius = '4px';
+     savePresetBtn.style.cursor = 'pointer';
+     savePresetBtn.style.fontSize = '12px';
+     savePresetBtn.textContent = '💾 Save';
+     savePresetBtn.title = 'Save current color as custom preset';
+     savePresetBtn.onclick = () => {
+       const presetName = prompt('Enter preset name:', 'My Color');
+       if (presetName) {
+         this._presetsManager.savePreset(presetName, colorInput.value);
+         this._showToast(`Preset "${presetName}" saved!`);
+         // Refresh the form to show new preset
+         setTimeout(() => {
+           if (document.body.contains(overlay)) {
+             document.body.removeChild(overlay);
+           }
+           this._showEditDialog(boxId, slotId, values.entity_id || undefined);
+         }, 500);
+       }
+     };
+     colorInputContainer.appendChild(savePresetBtn);
+
+     colorField.appendChild(colorInputContainer);
     
     // Temperature row
     const tempRow = document.createElement('div');
@@ -1928,55 +2126,146 @@ class KCFSCard extends HTMLElement {
     pressureField.appendChild(pressureLabel);
     pressureField.appendChild(pressureInput);
     
-    // Buttons
-    const buttonRow = document.createElement('div');
-    buttonRow.className = 'dialog-actions';
-    
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'dialog-btn dialog-btn-cancel';
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = () => {
-      if (document.body.contains(overlay)) {
-        document.body.removeChild(overlay);
-      }
-    };
-    
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'dialog-btn dialog-btn-save';
-    saveBtn.textContent = 'Save';
-    saveBtn.id = 'btn-save';
-    saveBtn.onclick = async () => {
-      console.log('Save button clicked');
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-      
-      try {
-        const formData = {
-          type: typeInput.value,
-          name: nameInput.value,
-          vendor: vendorInput.value,
-          color: colorInput.value,
-          min_temp: parseFloat(minTempInput.value),
-          max_temp: parseFloat(maxTempInput.value),
-          pressure: parseFloat(pressureInput.value),
-        };
-        
-        console.log('Form data:', formData);
-        await this._saveMaterial(boxId, slotId, formData);
-        
-        if (document.body.contains(overlay)) {
-          document.body.removeChild(overlay);
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Save';
-        this._showToast(`Error: ${error.message}`);
-      }
-    };
-    
-    buttonRow.appendChild(cancelBtn);
-    buttonRow.appendChild(saveBtn);
+     // Preset management section
+     const hasCustomPresets = Object.keys(customPresets).length > 0;
+     if (hasCustomPresets) {
+       const presetMgmtSection = document.createElement('div');
+       presetMgmtSection.style.marginTop = '16px';
+       presetMgmtSection.style.paddingTop = '16px';
+       presetMgmtSection.style.borderTop = '1px solid rgba(var(--rgb-primary-text-color), 0.1)';
+       
+       const mgmtLabel = document.createElement('label');
+       mgmtLabel.className = 'form-label';
+       mgmtLabel.textContent = 'Manage Custom Presets';
+       presetMgmtSection.appendChild(mgmtLabel);
+       
+       const presetsList = document.createElement('div');
+       presetsList.style.display = 'grid';
+       presetsList.style.gap = '8px';
+       
+       Object.entries(customPresets).forEach(([name, color]) => {
+         const presetItem = document.createElement('div');
+         presetItem.style.display = 'grid';
+         presetItem.style.gridTemplateColumns = '24px 1fr auto auto';
+         presetItem.style.alignItems = 'center';
+         presetItem.style.gap = '8px';
+         presetItem.style.padding = '8px';
+         presetItem.style.background = 'rgba(var(--rgb-primary-text-color), 0.05)';
+         presetItem.style.borderRadius = '4px';
+         
+         const colorBox = document.createElement('div');
+         colorBox.style.width = '24px';
+         colorBox.style.height = '24px';
+         colorBox.style.background = color;
+         colorBox.style.borderRadius = '4px';
+         colorBox.style.border = '1px solid rgba(var(--rgb-primary-text-color), 0.2)';
+         presetItem.appendChild(colorBox);
+         
+         const nameLabel = document.createElement('span');
+         nameLabel.textContent = name;
+         nameLabel.style.fontSize = '12px';
+         presetItem.appendChild(nameLabel);
+         
+         const renameBtn = document.createElement('button');
+         renameBtn.type = 'button';
+         renameBtn.textContent = '✏️';
+         renameBtn.style.padding = '4px 8px';
+         renameBtn.style.background = 'var(--primary-color)';
+         renameBtn.style.color = 'white';
+         renameBtn.style.border = 'none';
+         renameBtn.style.borderRadius = '3px';
+         renameBtn.style.cursor = 'pointer';
+         renameBtn.style.fontSize = '12px';
+         renameBtn.onclick = () => {
+           const newName = prompt('New preset name:', name);
+           if (newName && newName !== name) {
+             this._presetsManager.renamePreset(name, newName);
+             this._showToast(`Preset renamed to "${newName}"`);
+           }
+         };
+         presetItem.appendChild(renameBtn);
+         
+         const deleteBtn = document.createElement('button');
+         deleteBtn.type = 'button';
+         deleteBtn.textContent = '🗑️';
+         deleteBtn.style.padding = '4px 8px';
+         deleteBtn.style.background = 'var(--error-color)';
+         deleteBtn.style.color = 'white';
+         deleteBtn.style.border = 'none';
+         deleteBtn.style.borderRadius = '3px';
+         deleteBtn.style.cursor = 'pointer';
+         deleteBtn.style.fontSize = '12px';
+         deleteBtn.onclick = () => {
+           if (confirm(`Delete preset "${name}"?`)) {
+             this._presetsManager.deletePreset(name);
+             this._showToast(`Preset "${name}" deleted`);
+             // Refresh dialog
+             setTimeout(() => {
+               if (document.body.contains(overlay)) {
+                 document.body.removeChild(overlay);
+               }
+               this._showEditDialog(boxId, slotId, values.entity_id || undefined);
+             }, 300);
+           }
+         };
+         presetItem.appendChild(deleteBtn);
+         
+         presetsList.appendChild(presetItem);
+       });
+       
+       presetMgmtSection.appendChild(presetsList);
+       container.appendChild(presetMgmtSection);
+     }
+     
+     // Buttons
+     const buttonRow = document.createElement('div');
+     buttonRow.className = 'dialog-actions';
+     
+     const cancelBtn = document.createElement('button');
+     cancelBtn.className = 'dialog-btn dialog-btn-cancel';
+     cancelBtn.textContent = 'Cancel';
+     cancelBtn.onclick = () => {
+       if (document.body.contains(overlay)) {
+         document.body.removeChild(overlay);
+       }
+     };
+     
+     const saveBtn = document.createElement('button');
+     saveBtn.className = 'dialog-btn dialog-btn-save';
+     saveBtn.textContent = 'Save';
+     saveBtn.id = 'btn-save';
+     saveBtn.onclick = async () => {
+       console.log('Save button clicked');
+       saveBtn.disabled = true;
+       saveBtn.textContent = 'Saving...';
+       
+       try {
+         const formData = {
+           type: typeInput.value,
+           name: nameInput.value,
+           vendor: vendorInput.value,
+           color: colorInput.value,
+           min_temp: parseFloat(minTempInput.value),
+           max_temp: parseFloat(maxTempInput.value),
+           pressure: parseFloat(pressureInput.value),
+         };
+         
+         console.log('Form data:', formData);
+         await this._saveMaterial(boxId, slotId, formData);
+         
+         if (document.body.contains(overlay)) {
+           document.body.removeChild(overlay);
+         }
+       } catch (error) {
+         console.error('Error:', error);
+         saveBtn.disabled = false;
+         saveBtn.textContent = 'Save';
+         this._showToast(`Error: ${error.message}`);
+       }
+     };
+     
+     buttonRow.appendChild(cancelBtn);
+     buttonRow.appendChild(saveBtn);
     
     // Assemble form
     container.appendChild(typeField);
@@ -2013,10 +2302,10 @@ class KCFSCard extends HTMLElement {
       // For external filament: boxId = -1, slotId = -1 -> send box_id: 0, slot_id: 0
       // For CFS filaments: boxId = 0-3, slotId = 0-3 -> send box_id: boxId+1, slot_id: slotId
       const isExternal = (boxId === -1 && slotId === -1);
-      const serviceData = {
-        device_id: deviceId,
-        box_id: isExternal ? 0 : (boxId + 1),
-        slot_id: isExternal ? 0 : slotId,
+      
+      // NORMALIZATION: Validate and normalize metadata fields to prevent duplicates
+      // Ensure no empty or invalid fields are sent to firmware
+      const normalizedData = this._normalizeFilamentMetadata({
         type: formData.type,
         name: formData.name,
         vendor: formData.vendor,
@@ -2024,9 +2313,16 @@ class KCFSCard extends HTMLElement {
         min_temp: formData.min_temp,
         max_temp: formData.max_temp,
         pressure: formData.pressure,
+      });
+
+      const serviceData = {
+        device_id: deviceId,
+        box_id: isExternal ? 0 : (boxId + 1),
+        slot_id: isExternal ? 0 : slotId,
+        ...normalizedData
       };
 
-      console.log('Calling service ha_creality_ws.set_cfs_material with:', serviceData);
+      console.log('Calling service ha_creality_ws.set_cfs_material with normalized data:', serviceData);
       
       await this._hass.callService('ha_creality_ws', 'set_cfs_material', serviceData);
       
@@ -2046,6 +2342,67 @@ class KCFSCard extends HTMLElement {
       alert(`Failed to save material: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Normalize filament metadata to prevent duplicates and invalid data
+   * NORMALIZATION RULES:
+   * 1. Trim and validate all string fields
+   * 2. Remove empty/invalid fields
+   * 3. Ensure type and name don't exceed safe lengths (40 chars)
+   * 4. Validate temperature ranges
+   * 5. Validate pressure range (0-1)
+   * 6. Ensure color is valid hex format
+   */
+  _normalizeFilamentMetadata(data) {
+    const normalized = {};
+
+    // Type field - max 20 chars
+    if (data.type && String(data.type).trim()) {
+      normalized.type = String(data.type).trim().substring(0, 20).toUpperCase();
+    } else {
+      normalized.type = "PLA";
+    }
+
+    // Name field - max 40 chars, prevent duplication with type
+    if (data.name && String(data.name).trim()) {
+      let name = String(data.name).trim().substring(0, 40);
+      // Avoid duplicating type in name if they're similar
+      if (name.toUpperCase() === normalized.type) {
+        name = `${normalized.type}-Filament`;
+      }
+      normalized.name = name;
+    } else {
+      normalized.name = `${normalized.type}-Filament`;
+    }
+
+    // Vendor field - optional, max 30 chars
+    if (data.vendor && String(data.vendor).trim()) {
+      normalized.vendor = String(data.vendor).trim().substring(0, 30);
+    } else {
+      normalized.vendor = "Creality";
+    }
+
+    // Color field - must be valid hex
+    if (data.color) {
+      const sanitized = KCFSCard._sanitizeColor(data.color);
+      normalized.color = sanitized;
+    } else {
+      normalized.color = "#cccccc";
+    }
+
+    // Temperature fields - must be within reasonable bounds
+    const minTemp = parseInt(data.min_temp) || 190;
+    const maxTemp = parseInt(data.max_temp) || 240;
+    normalized.min_temp = Math.max(150, Math.min(300, minTemp));
+    normalized.max_temp = Math.max(normalized.min_temp, Math.min(350, maxTemp));
+
+    // Pressure field - must be 0-1
+    const pressure = parseFloat(data.pressure) || 0.04;
+    normalized.pressure = Math.max(0, Math.min(1, pressure));
+
+    console.log('Metadata normalized:', { original: data, normalized });
+    return normalized;
   }
 
   async _getDeviceId() {
