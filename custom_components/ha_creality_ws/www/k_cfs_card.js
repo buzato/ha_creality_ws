@@ -1177,6 +1177,12 @@ class KCFSCard extends HTMLElement {
         cursor: not-allowed;
         transform: none;
       }
+
+      .dialog-form {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
     `;
 
     this._root.innerHTML = `
@@ -1828,11 +1834,28 @@ class KCFSCard extends HTMLElement {
 
     // Create modal overlay
     const overlay = document.createElement('div');
-    overlay.className = 'edit-dialog-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = '1000';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.backdropFilter = 'blur(4px)';
     
     // Create dialog container
     const dialog = document.createElement('div');
-    dialog.className = 'edit-dialog';
+    dialog.style.backgroundColor = 'var(--card-background-color)';
+    dialog.style.borderRadius = '12px';
+    dialog.style.padding = '24px';
+    dialog.style.maxWidth = '500px';
+    dialog.style.width = '90%';
+    dialog.style.maxHeight = '90vh';
+    dialog.style.overflow = 'auto';
+    dialog.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
     
     // Create dialog header
     const header = document.createElement('div');
@@ -1897,6 +1920,7 @@ class KCFSCard extends HTMLElement {
 
   _renderEditForm(boxId, slotId, values, overlay) {
     const container = document.createElement('div');
+    container.className = 'dialog-form';
     
     // Type field
     const typeField = document.createElement('div');
@@ -2006,8 +2030,9 @@ class KCFSCard extends HTMLElement {
      // Separator for custom presets
      if (Object.keys(customPresets).length > 0) {
        const separator = document.createElement('div');
-       separator.style.width = '100%';
+       separator.style.flexBasis = '100%';
        separator.style.height = '1px';
+       separator.style.margin = '4px 0';
        separator.style.background = 'rgba(var(--rgb-primary-text-color), 0.1)';
        presetsContainer.appendChild(separator);
        addPresetButtons(customPresets, true);
@@ -2123,9 +2148,74 @@ class KCFSCard extends HTMLElement {
     pressureInput.max = '1';
     pressureInput.step = '0.01';
     
-    pressureField.appendChild(pressureLabel);
-    pressureField.appendChild(pressureInput);
+     pressureField.appendChild(pressureLabel);
+     pressureField.appendChild(pressureInput);
+     
+      // Buttons
+     const buttonRow = document.createElement('div');
+     buttonRow.className = 'dialog-actions';
+     buttonRow.style.position = 'sticky';
+     buttonRow.style.bottom = '-24px'; // Compensa o padding do dialog
+     buttonRow.style.background = 'var(--card-background-color)';
+     buttonRow.style.padding = '16px 0 0 0';
+     buttonRow.style.marginTop = '16px';
+     buttonRow.style.borderTop = '1px solid rgba(var(--rgb-primary-text-color), 0.1)';
+     buttonRow.style.zIndex = '10';
+     
+     const cancelBtn = document.createElement('button');
+     cancelBtn.className = 'dialog-btn dialog-btn-cancel';
+     cancelBtn.textContent = 'Cancel';
+     cancelBtn.onclick = () => {
+       if (document.body.contains(overlay)) {
+         document.body.removeChild(overlay);
+       }
+     };
+     
+     const saveBtn = document.createElement('button');
+     saveBtn.className = 'dialog-btn dialog-btn-save';
+     saveBtn.textContent = 'Save';
+     saveBtn.id = 'btn-save';
+     saveBtn.onclick = async () => {
+       console.log('Save button clicked');
+       saveBtn.disabled = true;
+       saveBtn.textContent = 'Saving...';
+       
+       try {
+         const formData = {
+           type: typeInput.value,
+           name: nameInput.value,
+           vendor: vendorInput.value,
+           color: colorInput.value,
+           min_temp: parseFloat(minTempInput.value),
+           max_temp: parseFloat(maxTempInput.value),
+           pressure: parseFloat(pressureInput.value),
+         };
+         
+         console.log('Form data:', formData);
+         await this._saveMaterial(boxId, slotId, formData);
+         
+         if (document.body.contains(overlay)) {
+           document.body.removeChild(overlay);
+         }
+       } catch (error) {
+         console.error('Error:', error);
+         saveBtn.disabled = false;
+         saveBtn.textContent = 'Save';
+         this._showToast(`Error: ${error.message}`);
+       }
+     };
+     
+     buttonRow.appendChild(cancelBtn);
+     buttonRow.appendChild(saveBtn);
     
+     // Assemble form
+     container.appendChild(typeField);
+     container.appendChild(nameField);
+     container.appendChild(vendorField);
+     container.appendChild(colorField);
+     container.appendChild(tempRow);
+     container.appendChild(pressureField);
+     
      // Preset management section
      const hasCustomPresets = Object.keys(customPresets).length > 0;
      if (hasCustomPresets) {
@@ -2181,6 +2271,13 @@ class KCFSCard extends HTMLElement {
            if (newName && newName !== name) {
              this._presetsManager.renamePreset(name, newName);
              this._showToast(`Preset renamed to "${newName}"`);
+             // Refresh dialog
+             setTimeout(() => {
+               if (document.body.contains(overlay)) {
+                 document.body.removeChild(overlay);
+               }
+               this._showEditDialog(boxId, slotId, values.entity_id || undefined);
+             }, 300);
            }
          };
          presetItem.appendChild(renameBtn);
@@ -2217,67 +2314,10 @@ class KCFSCard extends HTMLElement {
        container.appendChild(presetMgmtSection);
      }
      
-     // Buttons
-     const buttonRow = document.createElement('div');
-     buttonRow.className = 'dialog-actions';
+     container.appendChild(buttonRow);
      
-     const cancelBtn = document.createElement('button');
-     cancelBtn.className = 'dialog-btn dialog-btn-cancel';
-     cancelBtn.textContent = 'Cancel';
-     cancelBtn.onclick = () => {
-       if (document.body.contains(overlay)) {
-         document.body.removeChild(overlay);
-       }
-     };
-     
-     const saveBtn = document.createElement('button');
-     saveBtn.className = 'dialog-btn dialog-btn-save';
-     saveBtn.textContent = 'Save';
-     saveBtn.id = 'btn-save';
-     saveBtn.onclick = async () => {
-       console.log('Save button clicked');
-       saveBtn.disabled = true;
-       saveBtn.textContent = 'Saving...';
-       
-       try {
-         const formData = {
-           type: typeInput.value,
-           name: nameInput.value,
-           vendor: vendorInput.value,
-           color: colorInput.value,
-           min_temp: parseFloat(minTempInput.value),
-           max_temp: parseFloat(maxTempInput.value),
-           pressure: parseFloat(pressureInput.value),
-         };
-         
-         console.log('Form data:', formData);
-         await this._saveMaterial(boxId, slotId, formData);
-         
-         if (document.body.contains(overlay)) {
-           document.body.removeChild(overlay);
-         }
-       } catch (error) {
-         console.error('Error:', error);
-         saveBtn.disabled = false;
-         saveBtn.textContent = 'Save';
-         this._showToast(`Error: ${error.message}`);
-       }
-     };
-     
-     buttonRow.appendChild(cancelBtn);
-     buttonRow.appendChild(saveBtn);
-    
-    // Assemble form
-    container.appendChild(typeField);
-    container.appendChild(nameField);
-    container.appendChild(vendorField);
-    container.appendChild(colorField);
-    container.appendChild(tempRow);
-    container.appendChild(pressureField);
-    container.appendChild(buttonRow);
-    
-    return container;
-  }
+     return container;
+   }
 
   async _saveMaterial(boxId, slotId, formData) {
     if (!this._hass) {
